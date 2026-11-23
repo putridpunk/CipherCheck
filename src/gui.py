@@ -7,7 +7,7 @@ import tkinter as tk
 
 from .analyzer import analyze
 from .friendly import explain, generate_password
-from .i18n import DEFAULT_LANG, LANGUAGES, is_rtl, t
+from .i18n import LANGUAGES, detect_language, is_rtl, t
 
 BG = "#000000"
 PANEL = "#020b04"
@@ -73,7 +73,7 @@ class App:
         root.geometry("1000x820")
         root.minsize(900, 800)
 
-        self.lang = DEFAULT_LANG
+        self.lang = detect_language()
         self._fonted: list[tuple[tk.Widget, int, bool]] = []
         self._status_job: str | None = None
 

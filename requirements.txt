@@ -1,0 +1,3 @@
+# No runtime dependencies (standard library only).
+# Optional, for a nicer terminal UI in later phases:
+# rich>=13

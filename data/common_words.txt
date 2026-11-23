@@ -1,0 +1,27 @@
+# General vocabulary used for dictionary-word detection (min 4 letters).
+# Whitespace separated. Extend with a larger wordlist for better coverage.
+about above admin after again against agent alpha always angel animal anthem apple april arrow atlas autumn
+baby back bacon badge ball banana bank basket batman battery beach bear beautiful beer bell berry best
+bird black blue board boat bonus book boston boy brain bread bridge bright brother brown bubble buddy
+bullet butter butterfly cake california camera candy captain card carlos castle cat chair champion chance
+change charles charlie chicken child chocolate circle city class clock cloud coffee color computer cookie
+cool copper correct country cowboy crazy cream crystal cupcake dallas dance dark daughter david dead
+dear delta dental desert diamond doctor dog dollar dolphin dragon dream drink eagle early earth east
+eagles elephant email empire energy engine falcon family father fire fish flower forest forever fox
+freedom friend frog future galaxy game garden gateway genius ghost giant gold golden golf grace green
+guitar hacker hammer happy harley heart heaven hello help hero hockey home honey horse hotel house
+hunter ice island jackson jaguar jasmine jazz jessica jordan joseph jungle junior kevin king kitten knight
+lady lake lemon letter light lightning lion little lola london love lucky magic mario master matrix
+maverick medical melody mercury michael midnight mike miller million mirror monday money monkey moon
+morning mother mountain music mustang name nature ninja night north number ocean office orange oscar
+panda paper paris party password patrick peace pepper phoenix piano pink pirate planet player pokemon
+police power prince princess puppy purple queen rabbit rain rainbow rangers raven red river robert
+robot rock rocket rose royal sailor salmon sandwich saturday school secret shadow shark sierra silver
+sister skate sky smile snake snow soccer soldier sonic sound south spider spirit spring star starwars
+steel stella stone storm strawberry student summer sunday sunshine super superman surfer sweet
+battery staple swimming sword table tennis test thunder tiger time tomato tower train travel tree
+trust turtle twilight ultra united universe valentine vampire velvet victory video viking violet
+walker warrior water welcome west whale white winner winter wizard wolf wonder world yankees yellow
+zebra zombie
+apple1 secure system server network internet access login master monitor window windows linux
+orbit planet rocket silent simple stable wander yellow bridge castle circle dinner garden

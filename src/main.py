@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, report
+from . import __version__, hashes, report
 from .analyzer import analyze
 
 
@@ -24,6 +24,8 @@ def build_parser() -> argparse.ArgumentParser:
     src.add_argument("-f", "--file", type=Path,
                      help="batch mode: audit one password per line (use synthetic data) "
                           "and print aggregate statistics only")
+    src.add_argument("--hash", metavar="HASH",
+                     help="identify a hash format and explain its security properties (no cracking)")
     p.add_argument("-r", "--report", type=Path, metavar="PATH",
                    help="write a report to PATH")
     p.add_argument("--format", choices=sorted(report.RENDERERS), help="report format (default: from extension)")
@@ -57,6 +59,10 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.hash is not None:
+        print(hashes.to_text(args.hash))
+        return 0
 
     if args.file:
         return _batch(args.file, args)

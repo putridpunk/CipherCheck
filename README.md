@@ -8,7 +8,7 @@ Everything runs locally: no network access, no telemetry, and exported reports n
 
 **Download:** grab `ciphercheck.exe` (app) or `ciphercheck-cli.exe` (terminal) from the [latest release](https://github.com/putridpunk/CipherCheck/releases/latest). The executables are not code-signed, so Windows SmartScreen may warn you the first time (More info > Run anyway).
 
-`ciphercheck.exe` opens a Matrix/hacker-themed window in plain language (9 languages: English, Português, Español, Français, Deutsch, Русский, العربية, 日本語, 简体中文; pick one from the menu in the top-right corner, the default follows your Windows language): type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. The generate button turns what you typed into a strong password that still resembles it (or creates a brand-new one if the field is empty), and you can copy it (the clipboard is wiped after 30 s). Everything stays on your computer.
+`ciphercheck.exe` opens a Matrix/hacker-themed window in plain language (three tabs: **Analyze** a password, **Audit** a file of synthetic test passwords as a statistics dashboard, **Hash** format identification; 9 languages: English, Português, Español, Français, Deutsch, Русский, العربية, 日本語, 简体中文; pick one from the menu in the top-right corner, the default follows your Windows language): type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. The generate button turns what you typed into a strong password that still resembles it (or creates a brand-new one if the field is empty), and you can copy it (the clipboard is wiped after 30 s). Everything stays on your computer.
 
 ```powershell
 .\build.ps1          # runs the tests, then builds ciphercheck.exe (app) and ciphercheck-cli.exe (terminal)
@@ -26,6 +26,7 @@ python -m src.main                       # prompts for the password (input hidde
 python -m src.main --stdin               # read one password from stdin
 python -m src.main -r report.html        # also export a report (txt / json / html)
 python -m src.main -f samples.txt -q -r summary.json   # batch mode: aggregate stats only
+python -m src.main --hash 5f4dcc3b5aa765d61d8327deb882cf99   # identify a hash format (never cracks it)
 ```
 
 `-p/--password` exists but is discouraged (it lands in shell history). Batch mode is meant for **synthetic** test data; it prints only aggregate statistics.
@@ -39,6 +40,8 @@ python -m src.main -f samples.txt -q -r summary.json   # batch mode: aggregate s
 | `src/dictionary.py` | Local common-password list, word list, leetspeak normalisation (`p@ssw0rd` → `password`) |
 | `src/analyzer.py` | Combines everything into a label, score, findings and recommendations |
 | `src/report.py` | TXT / JSON / HTML reports and batch aggregation |
+| `src/vulnerabilities.py` | Turns an analysis into categorised weaknesses (severity, why it matters, how to fix) for the detailed reports |
+| `src/hashes.py` | Identifies hash formats (MD5, SHA-*, bcrypt, Argon2, ...) and explains their password-storage properties; a format match is a hint, never proof of origin |
 | `src/friendly.py` | Plain-language explanations and the password generator used by the app |
 | `src/i18n.py`, `src/locales/` | Translations (one file per language; `en.py` is the master, a test checks every locale has the same keys) |
 | `src/gui.py` | Matrix-themed desktop app (tkinter) |

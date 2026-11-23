@@ -6,8 +6,8 @@ venv/
 .idea/
 .vscode/
 # Generated reports
-report.*
-summary.*
+/report.*
+/summary.*
 reports/
 build/
 dist/

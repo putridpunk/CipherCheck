@@ -4,9 +4,20 @@ A modular password security auditing tool developed in Python. Evaluates passwor
 
 Everything runs locally: no network access, no telemetry, and exported reports never contain the password.
 
-## Usage
+## Desktop app (Windows)
 
-Requires Python 3.10+ and no third-party packages.
+`ciphercheck.exe` opens a Matrix/hacker-themed window in plain Portuguese: type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. It can also generate a strong password and copy it (the clipboard is wiped after 30 s). Everything stays on your computer.
+
+```powershell
+.\build.ps1          # runs the tests, then builds ciphercheck.exe (app) and ciphercheck-cli.exe (terminal)
+.\ciphercheck.exe    # or: python ciphercheck.py
+```
+
+The word and password lists are bundled inside the executables; no Python needed.
+
+## Command line
+
+Requires Python 3.10+ and no third-party packages (or use `ciphercheck-cli.exe`).
 
 ```powershell
 python -m src.main                       # prompts for the password (input hidden)
@@ -17,15 +28,6 @@ python -m src.main -f samples.txt -q -r summary.json   # batch mode: aggregate s
 
 `-p/--password` exists but is discouraged (it lands in shell history). Batch mode is meant for **synthetic** test data; it prints only aggregate statistics.
 
-## Executable (Windows)
-
-```powershell
-.\build.ps1          # runs the tests, then builds dist\ciphercheck.exe (PyInstaller, single file)
-.\dist\ciphercheck.exe --help
-```
-
-The word and password lists are bundled inside the `.exe`; it needs no Python installed. Double-clicking it prompts for a password and keeps the window open.
-
 ## How it works
 
 | Module | Role |
@@ -35,6 +37,8 @@ The word and password lists are bundled inside the `.exe`; it needs no Python in
 | `src/dictionary.py` | Local common-password list, word list, leetspeak normalisation (`p@ssw0rd` → `password`) |
 | `src/analyzer.py` | Combines everything into a label, score, findings and recommendations |
 | `src/report.py` | TXT / JSON / HTML reports and batch aggregation |
+| `src/friendly.py` | Plain-language (PT) explanations and the password generator used by the app |
+| `src/gui.py` | Matrix-themed desktop app (tkinter) |
 | `src/main.py` | CLI |
 
 Theoretical entropy assumes uniformly random characters, so it overestimates human-chosen passwords (`P@ssw0rd!` has ~59 theoretical bits but is a top-tier guess). The **estimated** figure is what drives the verdict. Special characters are reported but never treated as a strength on their own.
@@ -57,5 +61,5 @@ python -m unittest discover -s tests -t .
 
 1. ~~Foundation, analysis, reporting~~ (done)
 2. Hash-format identification module
-3. Dashboard / GUI
+3. Export reports from the app
 4. Optional C++ analysis engine

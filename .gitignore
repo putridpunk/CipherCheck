@@ -12,3 +12,4 @@ reports/
 build/
 dist/
 *.spec
+*.exe

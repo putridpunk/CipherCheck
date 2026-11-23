@@ -54,6 +54,8 @@ class Analysis:
     findings: list[Finding] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
     matches: list[Match] = field(default_factory=list)
+    passphrase_words: int = 0
+    word_plus_digits: bool = False
 
     @property
     def pattern_kinds(self) -> list[str]:
@@ -107,7 +109,8 @@ def analyze(password: str, dictionary: Dictionary | None = None) -> Analysis:
     if any(m.leet for m in all_matches if m.kind in ("word", "common_password")):
         findings.append(Finding("-", "Uses predictable character substitutions (a->@, o->0, ...)"))
         recs.append("Substitutions like a->@ or o->0 are well known to attackers and add almost no strength.")
-    if patterns.word_plus_digits(password, [m for m in used if m.kind == "word"]):
+    wpd = patterns.word_plus_digits(password, [m for m in used if m.kind == "word"])
+    if wpd:
         findings.append(Finding("-", "Common word followed by numbers"))
         recs.append("Do not just append digits to a word.")
 
@@ -132,4 +135,6 @@ def analyze(password: str, dictionary: Dictionary | None = None) -> Analysis:
         findings=findings,
         recommendations=list(dict.fromkeys(recs)),
         matches=all_matches,
+        passphrase_words=len(words_used) if len(words_used) >= 3 and "common_password" not in kinds else 0,
+        word_plus_digits=wpd,
     )

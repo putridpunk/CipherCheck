@@ -6,7 +6,7 @@ Everything runs locally: no network access, no telemetry, and exported reports n
 
 ## Desktop app (Windows)
 
-`ciphercheck.exe` opens a Matrix/hacker-themed window in plain Portuguese: type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. It can also generate a strong password and copy it (the clipboard is wiped after 30 s). Everything stays on your computer.
+`ciphercheck.exe` opens a Matrix/hacker-themed window in plain language (9 languages: English, Português, Español, Français, Deutsch, Русский, العربية, 日本語, 简体中文; pick one from the menu in the top-right corner, the default follows your Windows language): type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. It can also generate a strong password and copy it (the clipboard is wiped after 30 s). Everything stays on your computer.
 
 ```powershell
 .\build.ps1          # runs the tests, then builds ciphercheck.exe (app) and ciphercheck-cli.exe (terminal)
@@ -37,7 +37,8 @@ python -m src.main -f samples.txt -q -r summary.json   # batch mode: aggregate s
 | `src/dictionary.py` | Local common-password list, word list, leetspeak normalisation (`p@ssw0rd` → `password`) |
 | `src/analyzer.py` | Combines everything into a label, score, findings and recommendations |
 | `src/report.py` | TXT / JSON / HTML reports and batch aggregation |
-| `src/friendly.py` | Plain-language (PT) explanations and the password generator used by the app |
+| `src/friendly.py` | Plain-language explanations and the password generator used by the app |
+| `src/i18n.py`, `src/locales/` | Translations (one file per language; `en.py` is the master, a test checks every locale has the same keys) |
 | `src/gui.py` | Matrix-themed desktop app (tkinter) |
 | `src/main.py` | CLI |
 
@@ -46,6 +47,10 @@ Theoretical entropy assumes uniformly random characters, so it overestimates hum
 Assessment thresholds (estimated bits): `<28` very weak · `<40` weak · `<60` moderate · `<80` strong · otherwise very strong. Passwords under 8 characters are capped at weak.
 
 ## Limits and honesty
+
+- Arabic is shaped and right-aligned correctly, but Tk has no right-to-left paragraph support, so punctuation and the `[-]` markers can sit on the wrong side of a line.
+- The language choice is not remembered between launches (it follows the system language).
+- The command-line tool and exported reports are English only.
 
 - Bundled dictionaries are small starter lists in `data/`. Drop in a larger list (e.g. a trimmed SecLists top-100k) for much better coverage; one entry per line/whitespace, most common first.
 - Entropy and crack-time numbers are models, not guarantees.

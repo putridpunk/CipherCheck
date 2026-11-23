@@ -1,4 +1,4 @@
-"""CipherCheck desktop app: Matrix / hacker themed, plain-language UI (tkinter)."""
+"""CipherCheck desktop app: Matrix / hacker themed, plain-language, multilingual UI (tkinter)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import tkinter as tk
 
 from .analyzer import analyze
 from .friendly import explain, generate_password
+from .i18n import LANGUAGES, detect_language, is_rtl, t
 
 BG = "#000000"
 PANEL = "#020b04"
@@ -14,6 +15,8 @@ GREEN = "#00ff41"
 DIM = "#2f9e4f"
 DARKER = "#0b3d1a"
 MONO = "Consolas"
+# Fonts with proper glyph coverage for non-Latin scripts (Windows).
+FONT_FAMILY = {"ja": "Yu Gothic UI", "zh": "Microsoft YaHei UI", "ar": "Segoe UI"}
 
 CELL = 18
 TRAIL = 16
@@ -70,6 +73,10 @@ class App:
         root.geometry("1000x820")
         root.minsize(900, 800)
 
+        self.lang = detect_language()
+        self._fonted: list[tuple[tk.Widget, int, bool]] = []
+        self._status_job: str | None = None
+
         self.canvas = tk.Canvas(root, bg=BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         self.rain = MatrixRain(self.canvas)
@@ -80,31 +87,51 @@ class App:
         self._build()
         self._blink = True
         self._blink_title()
-        self.update_result()
+        self.apply_language()
 
-    # ---------- layout ----------
+    # ---------- helpers ----------
+    def tr(self, key: str, **kw) -> str:
+        return t(self.lang, key, **kw)
+
+    def _family(self) -> str:
+        return FONT_FAMILY.get(self.lang, MONO)
+
+    def _reg(self, widget: tk.Widget, size: int, bold: bool = False) -> None:
+        self._fonted.append((widget, size, bold))
+
+    def _apply_fonts(self) -> None:
+        fam = self._family()
+        for w, size, bold in self._fonted:
+            w.config(font=(fam, size, "bold" if bold else "normal"))
+        self.text.tag_config("head", font=(fam, 10, "bold"))
+
     def _label(self, text="", size=11, color=GREEN, bold=False, **kw) -> tk.Label:
-        return tk.Label(self.panel, text=text, bg=PANEL, fg=color,
-                        font=(MONO, size, "bold" if bold else "normal"), **kw)
+        lbl = tk.Label(self.panel, text=text, bg=PANEL, fg=color, **kw)
+        self._reg(lbl, size, bold)
+        return lbl
 
-    def _button(self, parent, text, command, width=None) -> tk.Button:
-        b = tk.Button(parent, text=text, command=command, bg=BG, fg=GREEN, relief="flat",
-                      font=(MONO, 11, "bold"), cursor="hand2", bd=0, padx=10, pady=6,
+    def _button(self, parent, command, width=None) -> tk.Button:
+        b = tk.Button(parent, command=command, bg=BG, fg=GREEN, relief="flat",
+                      cursor="hand2", bd=0, padx=10, pady=6,
                       activebackground=GREEN, activeforeground=BG,
                       highlightbackground=GREEN, highlightthickness=1)
+        self._reg(b, 10, True)
         if width:
             b.config(width=width)
         b.bind("<Enter>", lambda e: b.config(bg=GREEN, fg=BG))
         b.bind("<Leave>", lambda e: b.config(bg=BG, fg=GREEN))
         return b
 
+    # ---------- layout ----------
     def _build(self) -> None:
-        self.title = self._label("CIPHERCHECK_", 26, GREEN, True)
-        self.title.pack(pady=(18, 0))
-        self._label("> descobre se a tua senha aguenta um hacker", 11, DIM).pack()
+        self.title = tk.Label(self.panel, text="CIPHERCHECK_", bg=PANEL, fg=GREEN,
+                              font=(MONO, 26, "bold"))
+        self.title.pack(pady=(34, 0))
+        self.subtitle = self._label(size=11, color=DIM, wraplength=600)
+        self.subtitle.pack()
 
-        self._label("root@tu:~$ escreve a tua senha", 11, DIM, anchor="w").pack(
-            fill="x", padx=30, pady=(18, 4))
+        self.prompt = self._label(size=11, color=DIM)
+        self.prompt.pack(fill="x", padx=30, pady=(18, 4))
         row = tk.Frame(self.panel, bg=PANEL)
         row.pack(fill="x", padx=30)
         self.var = tk.StringVar()
@@ -113,30 +140,31 @@ class App:
                               highlightthickness=1, highlightbackground=DARKER,
                               highlightcolor=GREEN, selectbackground=GREEN, selectforeground=BG)
         self.entry.pack(side="left", fill="x", expand=True, ipady=7)
-        self.show_btn = self._button(row, "mostrar", self.toggle_show, width=9)
+        self.show_btn = self._button(row, self.toggle_show, width=9)
         self.show_btn.pack(side="left", padx=(8, 0))
         self.var.trace_add("write", lambda *_: self.update_result())
         self.entry.focus_set()
 
-        self._label("Fica tudo no teu computador. Nada é enviado nem guardado.",
-                    9, DIM).pack(pady=(6, 0))
+        self.privacy = self._label(size=9, color=DIM, wraplength=600)
+        self.privacy.pack(pady=(6, 0))
 
-        self.verdict = self._label("", 30, GREEN, True)
+        self.verdict = self._label(size=30, bold=True)
         self.verdict.pack(pady=(14, 4))
         self.bar = tk.Canvas(self.panel, width=600, height=16, bg=PANEL, highlightthickness=0)
         self.bar.pack()
-        self.headline = self._label("", 12, GREEN, wraplength=600, justify="center")
+        self.headline = self._label(size=12, wraplength=600, justify="center")
         self.headline.pack(pady=(8, 2))
-        self.crack = self._label("", 10, DIM, wraplength=600, justify="center")
+        self.crack = self._label(size=10, color=DIM, wraplength=600, justify="center")
         self.crack.pack()
 
         frame = tk.Frame(self.panel, bg=PANEL)
         frame.pack(fill="both", expand=True, padx=30, pady=(12, 6))
-        self.text = tk.Text(frame, bg=BG, fg=GREEN, font=(MONO, 11), relief="flat", wrap="word",
+        self.text = tk.Text(frame, bg=BG, fg=GREEN, relief="flat", wrap="word",
                             highlightthickness=1, highlightbackground=DARKER, padx=12, pady=10,
                             state="disabled", cursor="arrow", spacing1=2, spacing3=2)
+        self._reg(self.text, 11)
         self.text.pack(fill="both", expand=True)
-        self.text.tag_config("head", foreground=DIM, font=(MONO, 10, "bold"), spacing1=8)
+        self.text.tag_config("head", foreground=DIM, spacing1=8)
         self.text.tag_config("bad", foreground="#ff6b6b")
         self.text.tag_config("good", foreground=GREEN)
         self.text.tag_config("tip", foreground="#9dffb5")
@@ -144,12 +172,50 @@ class App:
 
         buttons = tk.Frame(self.panel, bg=PANEL)
         buttons.pack(pady=(4, 6))
-        self._button(buttons, "GERAR SENHA FORTE", self.generate).pack(side="left", padx=4)
-        self._button(buttons, "COPIAR", self.copy).pack(side="left", padx=4)
-        self._button(buttons, "LIMPAR", lambda: self.var.set("")).pack(side="left", padx=4)
+        self.gen_btn = self._button(buttons, self.generate)
+        self.copy_btn = self._button(buttons, self.copy)
+        self.clear_btn = self._button(buttons, lambda: self.var.set(""))
+        for b in (self.gen_btn, self.copy_btn, self.clear_btn):
+            b.pack(side="left", padx=4)
 
-        self.status = self._label("", 10, GREEN)
+        self.status = self._label(size=10, wraplength=600)
         self.status.pack(pady=(0, 12))
+
+        # language selector (top-right corner of the panel)
+        self.lang_var = tk.StringVar(value=LANGUAGES[self.lang])
+        self.lang_menu = tk.OptionMenu(self.panel, self.lang_var, *LANGUAGES.values(),
+                                       command=self.on_language)
+        menu_font = ("Segoe UI", 10)
+        self.lang_menu.config(bg=BG, fg=GREEN, activebackground=GREEN, activeforeground=BG,
+                              relief="flat", bd=0, highlightthickness=1,
+                              highlightbackground=GREEN, font=menu_font, cursor="hand2")
+        self.lang_menu["menu"].config(bg=BG, fg=GREEN, activebackground=GREEN,
+                                      activeforeground=BG, font=menu_font, bd=0)
+        self.lang_menu.place(relx=1.0, x=-12, y=10, anchor="ne")
+
+    # ---------- language ----------
+    def set_language(self, code: str) -> None:
+        self.lang = code
+        self.lang_var.set(LANGUAGES[code])
+        self.apply_language()
+
+    def on_language(self, name: str) -> None:
+        self.set_language(next(code for code, n in LANGUAGES.items() if n == name))
+
+    def apply_language(self) -> None:
+        rtl = is_rtl(self.lang)
+        self._apply_fonts()
+        self.subtitle.config(text=self.tr("subtitle"))
+        self.prompt.config(text=self.tr("prompt"), anchor="e" if rtl else "w")
+        self.privacy.config(text=self.tr("privacy"))
+        self.gen_btn.config(text=self.tr("gen"))
+        self.copy_btn.config(text=self.tr("copy"))
+        self.clear_btn.config(text=self.tr("clear"))
+        self._refresh_show_btn()
+        for tag in ("head", "bad", "good", "tip", "idle"):
+            self.text.tag_config(tag, justify="right" if rtl else "left")
+        self.status.config(text="")
+        self.update_result()
 
     # ---------- behaviour ----------
     def _blink_title(self) -> None:
@@ -157,29 +223,35 @@ class App:
         self.title.config(text="CIPHERCHECK" + ("_" if self._blink else " "))
         self.root.after(550, self._blink_title)
 
-    def toggle_show(self) -> None:
-        hidden = self.entry.cget("show") != ""
-        self.entry.config(show="" if hidden else "•")
-        self.show_btn.config(text="esconder" if hidden else "mostrar")
+    def _refresh_show_btn(self) -> None:
+        shown = self.entry.cget("show") == ""
+        self.show_btn.config(text=self.tr("hide" if shown else "show"))
 
-    def say(self, msg: str) -> None:
-        self.status.config(text="> " + msg)
+    def toggle_show(self) -> None:
+        shown = self.entry.cget("show") == ""
+        self.entry.config(show="•" if shown else "")
+        self._refresh_show_btn()
+
+    def say(self, key: str) -> None:
+        if self._status_job:
+            self.root.after_cancel(self._status_job)
+        self.status.config(text="> " + self.tr(key))
         self._status_job = self.root.after(5000, lambda: self.status.config(text=""))
 
     def generate(self) -> None:
         self.var.set(generate_password(16))
         if self.entry.cget("show") != "":
             self.toggle_show()
-        self.say("Senha criada! Copia-a e guarda-a num sítio seguro.")
+        self.say("st_generated")
 
     def copy(self) -> None:
         pw = self.var.get()
         if not pw:
-            self.say("Ainda não escreveste nenhuma senha.")
+            self.say("st_empty")
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(pw)
-        self.say("Copiado! Vai ser apagado da área de transferência em 30 segundos.")
+        self.say("st_copied")
 
         def wipe() -> None:
             try:
@@ -209,25 +281,22 @@ class App:
         if not pw:
             self.verdict.config(text="—", fg=DIM)
             self._draw_bar(0, DIM)
-            self.headline.config(text="Escreve uma senha em cima para começar.", fg=DIM)
+            self.headline.config(text=self.tr("idle_headline"), fg=DIM)
             self.crack.config(text="")
-            self._write([("idle", "A análise aparece aqui enquanto escreves."),
-                         ("idle", ""),
-                         ("idle", "Dica: não precisas de usar a tua senha verdadeira."
-                                  " Experimenta uma parecida para ver como funciona.")])
+            self._write([("idle", self.tr("idle_1")), ("idle", ""), ("idle", self.tr("idle_2"))])
             return
-        r = explain(analyze(pw))
+        r = explain(analyze(pw), self.lang)
         self.verdict.config(text=r.verdict, fg=r.color)
         self._draw_bar(r.level, r.color)
         self.headline.config(text=r.headline, fg=r.color)
-        self.crack.config(text=f"Um hacker com um computador potente descobria-a em: {r.crack_time}")
+        self.crack.config(text=self.tr("crack", time=r.crack_time))
         lines: list[tuple[str, str]] = []
         if r.bad:
-            lines += [("head", "[ O QUE ESTÁ MAL ]")] + [("bad", f" [-] {t}") for t in r.bad]
+            lines += [("head", self.tr("hdr_bad"))] + [("bad", f" [-] {x}") for x in r.bad]
         if r.good:
-            lines += [("head", "[ O QUE ESTÁ BEM ]")] + [("good", f" [+] {t}") for t in r.good]
+            lines += [("head", self.tr("hdr_good"))] + [("good", f" [+] {x}") for x in r.good]
         if r.tips:
-            lines += [("head", "[ COMO MELHORAR ]")] + [("tip", f" [>] {t}") for t in r.tips]
+            lines += [("head", self.tr("hdr_tips"))] + [("tip", f" [>] {x}") for x in r.tips]
         self._write(lines)
 
 

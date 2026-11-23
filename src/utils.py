@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import string
+import sys
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
+# When frozen by PyInstaller, bundled data is unpacked under sys._MEIPASS.
+if getattr(sys, "frozen", False):
+    ROOT_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+else:
+    ROOT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT_DIR / "data"
 
 LOWER = set(string.ascii_lowercase)

@@ -9,3 +9,6 @@ venv/
 report.*
 summary.*
 reports/
+build/
+dist/
+*.spec

@@ -17,6 +17,15 @@ python -m src.main -f samples.txt -q -r summary.json   # batch mode: aggregate s
 
 `-p/--password` exists but is discouraged (it lands in shell history). Batch mode is meant for **synthetic** test data; it prints only aggregate statistics.
 
+## Executable (Windows)
+
+```powershell
+.\build.ps1          # runs the tests, then builds dist\ciphercheck.exe (PyInstaller, single file)
+.\dist\ciphercheck.exe --help
+```
+
+The word and password lists are bundled inside the `.exe`; it needs no Python installed. Double-clicking it prompts for a password and keeps the window open.
+
 ## How it works
 
 | Module | Role |

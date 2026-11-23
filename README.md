@@ -6,7 +6,9 @@ Everything runs locally: no network access, no telemetry, and exported reports n
 
 ## Desktop app (Windows)
 
-`ciphercheck.exe` opens a Matrix/hacker-themed window in plain language (9 languages: English, Português, Español, Français, Deutsch, Русский, العربية, 日本語, 简体中文; pick one from the menu in the top-right corner, the default follows your Windows language): type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. It can also generate a strong password and copy it (the clipboard is wiped after 30 s). Everything stays on your computer.
+**Download:** grab `ciphercheck.exe` (app) or `ciphercheck-cli.exe` (terminal) from the [latest release](https://github.com/putridpunk/CipherCheck/releases/latest). The executables are not code-signed, so Windows SmartScreen may warn you the first time (More info > Run anyway).
+
+`ciphercheck.exe` opens a Matrix/hacker-themed window in plain language (9 languages: English, Português, Español, Français, Deutsch, Русский, العربية, 日本語, 简体中文; pick one from the menu in the top-right corner, the default follows your Windows language): type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. The generate button turns what you typed into a strong password that still resembles it (or creates a brand-new one if the field is empty), and you can copy it (the clipboard is wiped after 30 s). Everything stays on your computer.
 
 ```powershell
 .\build.ps1          # runs the tests, then builds ciphercheck.exe (app) and ciphercheck-cli.exe (terminal)

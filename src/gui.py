@@ -6,7 +6,7 @@ import random
 import tkinter as tk
 
 from .analyzer import analyze
-from .friendly import explain, generate_password
+from .friendly import explain, generate_password, strengthen
 from .i18n import LANGUAGES, detect_language, is_rtl, t
 
 BG = "#000000"
@@ -70,8 +70,9 @@ class App:
         self.root = root
         root.title("CipherCheck")
         root.configure(bg=BG)
-        root.geometry("1000x820")
-        root.minsize(900, 800)
+        height = min(820, root.winfo_screenheight() - 90)
+        root.geometry(f"1000x{height}")
+        root.minsize(900, 560)
 
         self.lang = detect_language()
         self._fonted: list[tuple[tk.Widget, int, bool]] = []
@@ -83,7 +84,7 @@ class App:
         self.rain.tick()
 
         self.panel = tk.Frame(root, bg=PANEL, highlightbackground=GREEN, highlightthickness=1)
-        self.panel.place(relx=0.5, rely=0.5, anchor="center", width=660, height=770)
+        self.panel.place(relx=0.5, rely=0.5, anchor="center", width=660, relheight=0.94)
         self._build()
         self._blink = True
         self._blink_title()
@@ -148,8 +149,19 @@ class App:
         self.privacy = self._label(size=9, color=DIM, wraplength=600)
         self.privacy.pack(pady=(6, 0))
 
+        buttons = tk.Frame(self.panel, bg=PANEL)
+        buttons.pack(pady=(12, 0))
+        self.gen_btn = self._button(buttons, self.generate)
+        self.copy_btn = self._button(buttons, self.copy)
+        self.clear_btn = self._button(buttons, lambda: self.var.set(""))
+        for b in (self.gen_btn, self.copy_btn, self.clear_btn):
+            b.pack(side="left", padx=4)
+
+        self.status = self._label(size=10, wraplength=600)
+        self.status.pack(pady=(4, 0))
+
         self.verdict = self._label(size=30, bold=True)
-        self.verdict.pack(pady=(14, 4))
+        self.verdict.pack(pady=(10, 4))
         self.bar = tk.Canvas(self.panel, width=600, height=16, bg=PANEL, highlightthickness=0)
         self.bar.pack()
         self.headline = self._label(size=12, wraplength=600, justify="center")
@@ -158,7 +170,7 @@ class App:
         self.crack.pack()
 
         frame = tk.Frame(self.panel, bg=PANEL)
-        frame.pack(fill="both", expand=True, padx=30, pady=(12, 6))
+        frame.pack(fill="both", expand=True, padx=30, pady=(12, 18))
         self.text = tk.Text(frame, bg=BG, fg=GREEN, relief="flat", wrap="word",
                             highlightthickness=1, highlightbackground=DARKER, padx=12, pady=10,
                             state="disabled", cursor="arrow", spacing1=2, spacing3=2)
@@ -169,17 +181,6 @@ class App:
         self.text.tag_config("good", foreground=GREEN)
         self.text.tag_config("tip", foreground="#9dffb5")
         self.text.tag_config("idle", foreground=DIM)
-
-        buttons = tk.Frame(self.panel, bg=PANEL)
-        buttons.pack(pady=(4, 6))
-        self.gen_btn = self._button(buttons, self.generate)
-        self.copy_btn = self._button(buttons, self.copy)
-        self.clear_btn = self._button(buttons, lambda: self.var.set(""))
-        for b in (self.gen_btn, self.copy_btn, self.clear_btn):
-            b.pack(side="left", padx=4)
-
-        self.status = self._label(size=10, wraplength=600)
-        self.status.pack(pady=(0, 12))
 
         # language selector (top-right corner of the panel)
         self.lang_var = tk.StringVar(value=LANGUAGES[self.lang])
@@ -239,10 +240,18 @@ class App:
         self._status_job = self.root.after(5000, lambda: self.status.config(text=""))
 
     def generate(self) -> None:
-        self.var.set(generate_password(16))
+        """Empty field: brand-new strong password. Otherwise: a strong version of the user's."""
+        current = self.var.get()
+        if not current:
+            self.var.set(generate_password(16))
+            msg = "st_generated"
+        else:
+            stronger = strengthen(current)
+            msg = "st_already" if stronger == current else "st_similar"
+            self.var.set(stronger)
         if self.entry.cget("show") != "":
             self.toggle_show()
-        self.say("st_generated")
+        self.say(msg)
 
     def copy(self) -> None:
         pw = self.var.get()

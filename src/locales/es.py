@@ -25,6 +25,8 @@ STRINGS = {
     "st_generated": "¡Contraseña creada! Cópiala y guárdala en un lugar seguro.",
     "st_copied": "¡Copiado! Se borrará del portapapeles en 30 segundos.",
     "st_empty": "Todavía no has escrito ninguna contraseña.",
+    "st_similar": "¡Hemos creado una versión fuerte de tu contraseña! Cópiala y guárdala en un lugar seguro.",
+    "st_already": "Tu contraseña ya es fuerte. La dejamos como está.",
     "v1": "MUY DÉBIL", "v2": "DÉBIL", "v3": "ACEPTABLE", "v4": "FUERTE", "v5": "MUY FUERTE",
     "h1": "Un hacker podría entrar en esta cuenta casi al instante.",
     "h2": "A un hacker le costaría algo de trabajo, pero no mucho.",

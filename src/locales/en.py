@@ -25,6 +25,8 @@ STRINGS = {
     "st_generated": "Password created! Copy it and keep it somewhere safe.",
     "st_copied": "Copied! It will be cleared from the clipboard in 30 seconds.",
     "st_empty": "You haven't typed a password yet.",
+    "st_similar": "Made a strong version of your password! Copy it and keep it somewhere safe.",
+    "st_already": "Your password is already strong. Kept as it is.",
     "v1": "VERY WEAK", "v2": "WEAK", "v3": "FAIR", "v4": "STRONG", "v5": "VERY STRONG",
     "h1": "A hacker could get into this account almost instantly.",
     "h2": "It takes a hacker some effort, but not much.",

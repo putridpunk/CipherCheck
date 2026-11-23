@@ -2,7 +2,7 @@ import re
 import unittest
 
 from src.analyzer import analyze
-from src.friendly import duration, explain, generate_password
+from src.friendly import duration, explain, generate_password, strengthen
 from src.i18n import LANGUAGES, t
 from src.locales import LOCALES
 from src.locales import en as master
@@ -75,6 +75,33 @@ class FriendlyTests(unittest.TestCase):
         self.assertEqual(len(pw), 16)
         self.assertNotEqual(pw, generate_password(16))
         self.assertIn(explain(analyze(pw)).level, (4, 5))
+
+
+class StrengthenTests(unittest.TestCase):
+    def test_result_is_strong_for_weak_inputs(self):
+        for pw in ("password", "Summer2024!", "qwerty123", "abc", "iloveyou", "hello"):
+            out = strengthen(pw)
+            self.assertIn(analyze(out).label, ("STRONG", "VERY STRONG"), pw)
+            self.assertGreaterEqual(len(out), 14)
+            self.assertNotEqual(out, pw)
+
+    def test_stays_similar(self):
+        for _ in range(20):
+            out = strengthen("Summer2024!")
+            self.assertTrue(out.startswith("S"))
+            self.assertIn("umm", out.lower())
+            self.assertNotIn("2024", out)
+
+    def test_predictable_parts_are_randomised(self):
+        self.assertNotIn("123", strengthen("monkey123"))
+        self.assertNotIn("qwerty", strengthen("qwerty").lower())
+
+    def test_strong_input_unchanged_and_empty_generates(self):
+        self.assertEqual(strengthen("T7#mQ9!vLp2"), "T7#mQ9!vLp2")
+        self.assertEqual(len(strengthen("")), 16)
+
+    def test_not_deterministic(self):
+        self.assertNotEqual(strengthen("monkey"), strengthen("monkey"))
 
 
 if __name__ == "__main__":

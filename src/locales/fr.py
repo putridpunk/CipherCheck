@@ -25,6 +25,8 @@ STRINGS = {
     "st_generated": "Mot de passe créé ! Copie-le et garde-le en lieu sûr.",
     "st_copied": "Copié ! Il sera effacé du presse-papiers dans 30 secondes.",
     "st_empty": "Tu n'as pas encore tapé de mot de passe.",
+    "st_similar": "Voici une version forte de ton mot de passe ! Copie-la et garde-la en lieu sûr.",
+    "st_already": "Ton mot de passe est déjà fort. Il reste tel quel.",
     "v1": "TRÈS FAIBLE", "v2": "FAIBLE", "v3": "MOYEN", "v4": "FORT", "v5": "TRÈS FORT",
     "h1": "Un pirate pourrait entrer dans ce compte presque instantanément.",
     "h2": "Ça demande un peu d'effort à un pirate, mais pas beaucoup.",

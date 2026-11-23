@@ -10,7 +10,7 @@ import secrets
 import string
 from dataclasses import dataclass, field
 
-from .analyzer import Analysis
+from .analyzer import Analysis, analyze
 from .entropy import OFFLINE_GUESSES_PER_SEC
 from .i18n import t, unit
 
@@ -106,3 +106,63 @@ def generate_password(length: int = 16) -> str:
     chars += [secrets.choice(pool) for _ in range(length - len(chars))]
     secrets.SystemRandom().shuffle(chars)
     return "".join(chars)
+
+
+SYMBOLS = "!@#$%&*?-_=+"
+LEET_SYMBOLS = {"a": "@", "e": "3", "i": "!", "o": "0", "s": "$", "t": "+"}
+SANITIZE_KINDS = {"sequence", "repeat_char", "repeat_block", "keyboard", "year"}
+TARGET_BITS = 70.0
+MIN_LENGTH = 14
+
+
+def _random_like(ch: str, rnd: secrets.SystemRandom) -> str:
+    if ch.isdigit():
+        return rnd.choice(string.digits)
+    if ch.isalpha():
+        return rnd.choice(string.ascii_lowercase if ch.islower() else string.ascii_uppercase)
+    return rnd.choice(SYMBOLS)
+
+
+def strengthen(password: str) -> str:
+    """Strong password that stays recognisably similar to `password`.
+
+    Keeps the user's base text, randomises predictable parts (years, sequences,
+    repeats, keyboard walks), mixes in some capitals and symbol swaps, then
+    appends random characters until the estimated strength is high enough.
+    A password that is already strong is returned unchanged.
+    """
+    if not password:
+        return generate_password(16)
+    analysis = analyze(password)
+    if analysis.label in ("STRONG", "VERY STRONG"):
+        return password
+
+    rnd = secrets.SystemRandom()
+    chars = list(password)
+
+    # 1. replace predictable spans with random characters of the same kind
+    for m in analysis.matches:
+        if m.kind in SANITIZE_KINDS:
+            for i in range(m.start, m.end):
+                chars[i] = _random_like(chars[i], rnd)
+
+    # 2. a couple of capitals and symbol swaps (never touching the first character)
+    letters = [i for i, c in enumerate(chars) if i > 0 and c.isalpha()]
+    for i in rnd.sample(letters, min(2, len(letters))):
+        chars[i] = chars[i].upper() if chars[i].islower() else chars[i]
+    swappable = [i for i in letters if chars[i].lower() in LEET_SYMBOLS]
+    for i in rnd.sample(swappable, min(2, len(swappable))):
+        chars[i] = LEET_SYMBOLS[chars[i].lower()]
+
+    # 3. append random characters (covering every character class) until strong
+    classes = [string.ascii_lowercase, string.ascii_uppercase, string.digits, SYMBOLS]
+    pool = "".join(classes)
+    result = "".join(chars)
+    tail: list[str] = []
+    for cls in classes:
+        if not any(c in cls for c in result):
+            tail.append(rnd.choice(cls))
+    result += "".join(tail)
+    while len(result) < MIN_LENGTH or analyze(result).estimated_bits < TARGET_BITS:
+        result += rnd.choice(pool)
+    return result

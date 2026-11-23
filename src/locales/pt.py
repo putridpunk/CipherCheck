@@ -25,6 +25,8 @@ STRINGS = {
     "st_generated": "Senha criada! Copia-a e guarda-a num sítio seguro.",
     "st_copied": "Copiado! Vai ser apagado da área de transferência em 30 segundos.",
     "st_empty": "Ainda não escreveste nenhuma senha.",
+    "st_similar": "Criámos uma versão forte da tua senha! Copia-a e guarda-a num sítio seguro.",
+    "st_already": "A tua senha já é forte. Mantivemo-la como está.",
     "v1": "MUITO FRACA", "v2": "FRACA", "v3": "RAZOÁVEL", "v4": "FORTE", "v5": "MUITO FORTE",
     "h1": "Um hacker entrava nesta conta quase de imediato.",
     "h2": "Dá algum trabalho a um hacker, mas não muito.",

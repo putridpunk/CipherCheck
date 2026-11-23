@@ -25,6 +25,8 @@ STRINGS = {
     "st_generated": "Passwort erstellt! Kopiere es und bewahre es sicher auf.",
     "st_copied": "Kopiert! Es wird in 30 Sekunden aus der Zwischenablage gelöscht.",
     "st_empty": "Du hast noch kein Passwort eingegeben.",
+    "st_similar": "Starke Version deines Passworts erstellt! Kopiere sie und bewahre sie sicher auf.",
+    "st_already": "Dein Passwort ist bereits stark. Es bleibt unverändert.",
     "v1": "SEHR SCHWACH", "v2": "SCHWACH", "v3": "MITTELMÄSSIG", "v4": "STARK", "v5": "SEHR STARK",
     "h1": "Ein Hacker käme fast sofort in dieses Konto.",
     "h2": "Ein Hacker braucht etwas Aufwand, aber nicht viel.",

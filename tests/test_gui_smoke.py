@@ -53,6 +53,69 @@ class GuiSmokeTests(unittest.TestCase):
                 app.show_tab(tab)
                 self.root.update()
 
+    def test_strong_password_asks_before_replacing(self):
+        tab, ui = self.app.tabs["analyze"], self.app.ui
+        strong = "T7#mQ9!vLp2xK4"
+        tab.var.set(strong)
+        self.root.after(150, lambda: ui.last_dialog.yes_btn.invoke())
+        tab.generate()  # answer YES: a brand-new password
+        self.assertNotEqual(tab.var.get(), strong)
+        self.assertEqual(len(tab.var.get()), 16)
+        tab.var.set(strong)
+        self.root.after(150, lambda: ui.last_dialog.no_btn.invoke())
+        tab.generate()  # answer NO: kept as it is
+        self.assertEqual(tab.var.get(), strong)
+        self.assertIn(ui.tr("st_already"), tab.status.cget("text"))
+
+    def test_confirm_dialog_is_translated(self):
+        from src.i18n import t
+        ui = self.app.ui
+        seen: dict = {}  # filled by look() while the dialog is open
+        for code in LANGUAGES:
+            ui.lang = code
+            seen.clear()
+
+            def look():
+                d = ui.last_dialog
+                seen["text"] = d.message.cget("text")
+                seen["buttons"] = (d.yes_btn.cget("text"), d.no_btn.cget("text"))
+                d.no_btn.invoke()
+
+            self.root.after(100, look)
+            ui.ask_yes_no("dlg_strong")
+            self.assertEqual(seen["text"], t(code, "dlg_strong"), code)
+            self.assertEqual(seen["buttons"], (t(code, "dlg_yes"), t(code, "dlg_no")), code)
+
+    def test_nothing_is_cut_off_at_any_language_or_font_size(self):
+        """Every visible widget must stay inside the panel, in all languages and all text sizes."""
+        from src.gui.widgets import SCALES
+        app, root = self.app, self.root
+        root.deiconify()
+        root.geometry("1000x760+0+0")
+        root.update()
+        problems = []
+
+        def walk(w):
+            for child in w.winfo_children():
+                if child.winfo_ismapped() and child.winfo_width() > 1:
+                    yield child
+                yield from walk(child)
+
+        for scale in SCALES:
+            app.ui.scale = scale
+            for code, name in LANGUAGES.items():
+                app.on_language(name)
+                for tab in app.tabs:
+                    app.show_tab(tab)
+                    root.update()
+                    left = app.panel.winfo_rootx()
+                    right = left + app.panel.winfo_width()
+                    for w in walk(app.panel):
+                        if w.winfo_rootx() < left - 1 or w.winfo_rootx() + w.winfo_width() > right + 1:
+                            problems.append((scale, code, tab, w.winfo_class(), str(w)[-18:],
+                                             w.winfo_rootx() - left, w.winfo_rootx() + w.winfo_width() - right))
+        self.assertEqual(problems[:5], [], f"{len(problems)} widgets are cut off")
+
     def test_font_scale_steps_and_is_remembered(self):
         from src import settings
         base = self.app.ui.size(11)

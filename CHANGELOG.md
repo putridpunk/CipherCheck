@@ -5,6 +5,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Larger text no longer gets cut off at the sides.** With the `A+` button the panel now widens (up to the window), wrapped text follows its real width, rows of buttons stack when they no longer fit, the footer wraps, and the results area can no longer ask for more room than the panel has. At the biggest size the window also grows taller (up to the screen) so the results stay visible. A test checks every language at every text size.
+
+### Added
+- **Confirmation when your password is already strong:** pressing "Generate strong password" now asks, in the current language, whether you want a brand-new one (instead of silently keeping it).
+
 ## [0.6.1] - 2026-11-24
 
 ### Fixed

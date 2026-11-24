@@ -20,6 +20,8 @@ from .widgets import UI
 
 TAB_CLASSES = {"analyze": AnalyzeTab, "audit": AuditTab, "hash": HashTab}
 REPO_URL = "https://github.com/putridpunk/CipherCheck"
+PANEL_WIDTH = 660
+PANEL_RELHEIGHT = 0.95
 ICON = ASSETS_DIR / "ciphercheck.png"
 
 
@@ -45,7 +47,7 @@ class App:
         self.rain.tick()
 
         self.panel = tk.Frame(root, bg=PANEL, highlightbackground=GREEN, highlightthickness=1)
-        self.panel.place(relx=0.5, rely=0.5, anchor="center", width=660, relheight=0.95)
+        self.panel.place(relx=0.5, rely=0.5, anchor="center", width=PANEL_WIDTH, relheight=PANEL_RELHEIGHT)
         self._build_header()
         self._build_tabs()
         self._build_corner_controls()
@@ -56,6 +58,8 @@ class App:
         self._blink_title()
         self.apply_language()
         self.show_tab("analyze")
+        root.bind("<Configure>", self._on_window_resize)
+        self.fit_panel()
 
     def _set_icon(self) -> None:
         try:
@@ -75,10 +79,10 @@ class App:
 
     def _build_tabs(self) -> None:
         ui = self.ui
-        bar = tk.Frame(self.panel, bg=PANEL)
-        bar.pack(pady=(14, 4))
-        # footer is packed before the content so it always keeps its space
-        self.footer = ui.label(self.panel, size=8, color=DIM, cursor="hand2",
+        bar = ui.button_row(self.panel)
+        bar.frame.pack(pady=(14, 4))
+        # footer is packed before the content so it always keeps its space; it wraps, never clips
+        self.footer = ui.label(self.panel, size=8, color=DIM, cursor="hand2", wraplength=1, justify="center",
                                text=f"CipherCheck v{__version__}  ·  PolyForm Noncommercial 1.0.0  ·  "
                                     "github.com/putridpunk")
         self.footer.pack(side="bottom", pady=(0, 6))
@@ -89,8 +93,7 @@ class App:
         self.pages: dict[str, tk.Frame] = {}
         self.tabs: dict = {}
         for name, cls in TAB_CLASSES.items():
-            b = ui.button(bar, lambda n=name: self.show_tab(n), hover=False)
-            b.pack(side="left", padx=4)
+            b = bar.button(self._tab_command(name), hover=False)
             self.tab_buttons[name] = b
             self.pages[name] = tk.Frame(content, bg=PANEL)
             self.tabs[name] = cls(ui, self.pages[name])
@@ -168,7 +171,7 @@ class App:
         return lambda: self.change_font(step)
 
     def _tab_command(self, name: str):
-        return lambda event: self.show_tab(name)
+        return lambda event=None: self.show_tab(name)
 
     def shortcut_generate(self) -> None:
         self.show_tab("analyze")
@@ -184,6 +187,28 @@ class App:
         settings.save(language=self.ui.lang)
         self.apply_language()
 
+    def fit_panel(self) -> None:
+        """Make the panel as wide as the font size needs (never wider than the window) and let
+        wrapped text and button rows adapt, so nothing is cut off at the sides."""
+        wanted = int(PANEL_WIDTH * max(1.0, self.ui.scale))
+        width = max(PANEL_WIDTH, min(wanted, self.root.winfo_width() - 30)) if self.root.winfo_width() > 1 else wanted
+        self.panel.place_configure(width=width)
+        self.ui.set_wrap_width(width - 60)
+        self.ui.refresh_layout()
+        self._grow_window_if_needed()
+
+    def _grow_window_if_needed(self) -> None:
+        """Bigger text needs more room: make the window taller (up to the screen), never shorter."""
+        self.root.update_idletasks()
+        needed = int(self.panel.winfo_reqheight() / PANEL_RELHEIGHT) + 24
+        limit = self.root.winfo_screenheight() - 90
+        if self.root.winfo_height() > 1 and needed > self.root.winfo_height():
+            self.root.geometry(f"{self.root.winfo_width()}x{min(needed, limit)}")
+
+    def _on_window_resize(self, event: Any) -> None:
+        if event.widget is self.root:
+            self.fit_panel()
+
     def on_close(self) -> None:
         self.tabs["audit"].stop_for_close()
         self.root.destroy()
@@ -196,6 +221,7 @@ class App:
             b.config(text=ui.tr("tab_" + name))
         for tab in self.tabs.values():
             tab.apply_language()
+        self.fit_panel()
 
     def _blink_title(self) -> None:
         self._blink = not self._blink

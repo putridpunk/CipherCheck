@@ -34,19 +34,15 @@ class AnalyzeTab:
         self.privacy = ui.label(page, size=9, color=DIM, wraplength=600)
         self.privacy.pack(pady=(6, 0))
 
-        buttons = tk.Frame(page, bg=PANEL)
-        buttons.pack(pady=(10, 0))
-        gen_row = tk.Frame(buttons, bg=PANEL)
-        gen_row.pack(pady=(0, 6))
-        self.gen_btn = ui.button(gen_row, self.generate)
-        self.phrase_btn = ui.button(gen_row, self.generate_phrase)
-        act_row = tk.Frame(buttons, bg=PANEL)
-        act_row.pack()
-        self.copy_btn = ui.button(act_row, self.copy)
-        self.clear_btn = ui.button(act_row, lambda: self.var.set(""))
-        self.save_btn = ui.button(act_row, self.save_report)
-        for b in (self.gen_btn, self.phrase_btn, self.copy_btn, self.clear_btn, self.save_btn):
-            b.pack(side="left", padx=4)
+        gen_row = ui.button_row(page)
+        gen_row.frame.pack(pady=(10, 2))
+        self.gen_btn = gen_row.button(self.generate)
+        self.phrase_btn = gen_row.button(self.generate_phrase)
+        act_row = ui.button_row(page)
+        act_row.frame.pack()
+        self.copy_btn = act_row.button(self.copy)
+        self.clear_btn = act_row.button(lambda: self.var.set(""))
+        self.save_btn = act_row.button(self.save_report)
         self.status = ui.label(page, size=10, wraplength=600)
         self.status.pack(pady=(4, 0))
 
@@ -103,8 +99,15 @@ class AnalyzeTab:
             msg = "st_generated"
         else:
             stronger = strengthen(current)
-            msg = "st_already" if stronger == current else "st_similar"
-            self.var.set(stronger)
+            if stronger == current:  # already strong: ask before replacing it
+                if self.ui.ask_yes_no("dlg_strong"):
+                    self.var.set(generate_password(16))
+                    msg = "st_generated"
+                else:
+                    msg = "st_already"
+            else:
+                self.var.set(stronger)
+                msg = "st_similar"
         if self.entry.cget("show") != "":
             self.toggle_show()
         self.say(msg)

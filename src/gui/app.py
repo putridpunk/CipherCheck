@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 import webbrowser
 
@@ -168,11 +169,12 @@ class App:
 
 
 def run() -> None:
-    try:  # crisp text on high-DPI Windows screens
-        import ctypes
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)
-    except Exception:
-        pass
+    if sys.platform == "win32":  # crisp text on high-DPI Windows screens
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            pass
     root = tk.Tk()
     App(root)
     root.mainloop()

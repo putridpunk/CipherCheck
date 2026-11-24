@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from .locales import LOCALES
 
@@ -31,13 +32,14 @@ def unit(lang: str, index: int, n: int) -> str:
 def detect_language() -> str:
     """Best guess of the user's language from the operating system."""
     candidates: list[str] = []
-    try:  # Windows UI language
-        import ctypes
-        buf = ctypes.create_unicode_buffer(85)
-        if ctypes.windll.kernel32.GetUserDefaultLocaleName(buf, 85):
-            candidates.append(buf.value)
-    except Exception:
-        pass
+    if sys.platform == "win32":  # Windows UI language
+        try:
+            import ctypes
+            buf = ctypes.create_unicode_buffer(85)
+            if ctypes.windll.kernel32.GetUserDefaultLocaleName(buf, 85):
+                candidates.append(buf.value)
+        except Exception:
+            pass
     candidates += [os.environ.get(v, "") for v in ("LC_ALL", "LC_MESSAGES", "LANG")]
     for c in candidates:
         code = c.lower().replace("_", "-").split("-")[0]

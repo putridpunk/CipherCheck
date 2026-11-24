@@ -45,15 +45,12 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
     if not args.quiet:
         print(report.aggregate_text(agg))
     if args.report:
-        fmt = (args.format or args.report.suffix.lstrip(".") or "txt").lower()
-        if fmt == "json":
-            args.report.write_text(json.dumps(agg, indent=2), encoding="utf-8")
-        elif fmt == "txt":
-            args.report.write_text(report.aggregate_text(agg), encoding="utf-8")
-        else:
-            print("error: batch reports support txt and json only", file=sys.stderr)
+        try:
+            out = report.write_aggregate(agg, args.report, args.format)
+        except (OSError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
             return 2
-        print(f"Report written to {args.report}")
+        print(f"Report written to {out}")
     return 0
 
 

@@ -5,8 +5,16 @@ main.py ──> analyzer.analyze(pw) ──> Analysis ──> report.{to_text,to
                │
                ├─ patterns.find_matches   (sequence, repeat, keyboard, year)
                ├─ dictionary.find_matches (common password, words, leetspeak)
+               ├─ breach.BreachDB.contains (offline leaked-password index)
                └─ entropy.estimate_entropy(pw, matches)
+
+gui/app.py ── tabs: analyze_tab (analyze + friendly.explain) ── audit_tab (report.aggregate)
+                    hash_tab (hashes.identify)   all text from i18n / locales/
 ```
+
+`src/gui/` keeps each tab in its own module; `widgets.UI` creates themed widgets and
+re-applies per-script fonts when the language changes. Data files and their origin are
+described in `data/README.md`; `tools/build_data.py` regenerates them.
 
 ## Entropy estimation
 
@@ -17,7 +25,7 @@ way to cover the whole password with matches and brute-forced characters
 detections never double-count.
 
 Costs: dictionary word ~13 bits (+ capitalisation / substitution extras), common
-password `log2(rank)+1`, sequence `log2(base)+log2(len)+1`, keyboard walk
+password `log2(rank)+1`, leaked-list match 20 bits (top ~1M), sequence `log2(base)+log2(len)+1`, keyboard walk
 `log2(47)+2·(len-1)`, year `log2(200)`.
 
 ## Privacy rules

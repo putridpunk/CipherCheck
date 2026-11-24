@@ -22,9 +22,9 @@ LEVELS = {
     "STRONG": (4, "#00ff41"),
     "VERY STRONG": (5, "#7dffb0"),
 }
-PROBLEM_KINDS = ("common_password", "word", "sequence", "repeat_char",
+PROBLEM_KINDS = ("common_password", "breached", "word", "sequence", "repeat_char",
                  "repeat_block", "keyboard", "year")
-KEY = {"common_password": "common", "word": "word", "sequence": "sequence",
+KEY = {"common_password": "common", "breached": "breached", "word": "word", "sequence": "sequence",
        "repeat_char": "repeat_char", "repeat_block": "repeat_block",
        "keyboard": "keyboard", "year": "year"}
 
@@ -81,7 +81,7 @@ def explain(a: Analysis, lang: str = "en") -> FriendlyReport:
     good: list[str] = []
     if a.length >= 12:
         good.append(t(lang, "g_length", n=a.length))
-    if a.length and "common_password" not in kinds:
+    if a.length and not kinds & {"common_password", "breached"}:
         good.append(t(lang, "g_notcommon"))
     if a.passphrase_words:
         good.append(t(lang, "g_phrase", n=a.passphrase_words))

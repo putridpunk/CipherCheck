@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
-from .analyzer import LABEL_ORDER, Analysis
+from .analyzer import LABEL_ORDER, PATTERN_ADVICE, PATTERN_TEXT, Analysis
 from .vulnerabilities import assess, risk_level
 
 BAR = "=" * 36
@@ -139,6 +139,10 @@ def aggregate(analyses: list[Analysis]) -> dict:
         "average_estimated_bits": round(sum(a.estimated_bits for a in analyses) / n, 1) if n else 0,
         "average_length": round(sum(a.length for a in analyses) / n, 1) if n else 0,
         "pattern_counts": dict(kinds.most_common()),
+        "most_common_problems": [
+            {"kind": k, "count": c, "percent": round(100 * c / n, 1),
+             "description": PATTERN_TEXT.get(k, k), "recommendation": PATTERN_ADVICE.get(k, "")}
+            for k, c in kinds.most_common()] if n else [],
     }
 
 
@@ -151,7 +155,56 @@ def aggregate_text(agg: dict) -> str:
     for lbl, c in agg["assessment_counts"].items():
         pct = 100 * c / agg["total"] if agg["total"] else 0
         lines.append(f"  {lbl:<12} {c:>6}  ({pct:.1f}%)")
-    lines += ["", "Patterns found (number of passwords):"]
-    lines += [f"  {k:<16} {v}" for k, v in agg["pattern_counts"].items()] or ["  none"]
+    lines += ["", "Most common problems (share of passwords):"]
+    for p in agg.get("most_common_problems", []):
+        lines += [f"  {p['percent']:>5}%  {p['description']}", f"          Fix: {p['recommendation']}"]
+    if not agg.get("most_common_problems"):
+        lines.append("  none")
     lines += ["", "No passwords are stored in this summary.", BAR]
     return "\n".join(lines)
+
+
+def aggregate_json(agg: dict) -> str:
+    return json.dumps(agg, indent=2)
+
+
+def aggregate_html(agg: dict) -> str:
+    e = html.escape
+    total = agg["total"] or 1
+    colors = {"VERY WEAK": "#c33", "WEAK": "#e80", "MODERATE": "#cb0", "STRONG": "#2a7", "VERY STRONG": "#0a5"}
+    bars = "\n".join(
+        f'<tr><td>{e(lbl)}</td><td style="width:60%"><div class="bar" style="width:{100 * c / total:.1f}%;'
+        f'background:{colors[lbl]}"></div></td><td>{c:,} ({100 * c / total:.1f}%)</td></tr>'
+        for lbl, c in agg["assessment_counts"].items())
+    probs = "\n".join(
+        f"<tr><td>{p['percent']}%</td><td>{e(p['description'])}<br><i>Fix: {e(p['recommendation'])}</i></td></tr>"
+        for p in agg.get("most_common_problems", [])) or '<tr><td colspan="2">None found.</td></tr>'
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>CipherCheck audit summary</title>
+<style>
+body{{font-family:system-ui,sans-serif;max-width:760px;margin:2rem auto;padding:0 1rem;color:#222}}
+table{{border-collapse:collapse;width:100%}} td{{border-top:1px solid #ddd;padding:6px;vertical-align:top}}
+.bar{{height:14px;border-radius:4px}} small{{color:#666}}
+</style></head><body>
+<h1>Password audit summary</h1>
+<p>{agg['total']:,} passwords analysed &middot; average length {agg['average_length']} &middot;
+average estimated entropy {agg['average_estimated_bits']} bits</p>
+<h2>Strength distribution</h2><table>{bars}</table>
+<h2>Most common problems</h2><table>{probs}</table>
+<p><small>Generated {e(agg['generated_at'])} by CipherCheck {e(agg['version'])}.
+No passwords are stored in this summary.</small></p>
+</body></html>
+"""
+
+
+AGG_RENDERERS = {"txt": aggregate_text, "json": aggregate_json, "html": aggregate_html}
+
+
+def write_aggregate(agg: dict, path: str | Path, fmt: str | None = None) -> Path:
+    path = Path(path)
+    fmt = (fmt or path.suffix.lstrip(".") or "txt").lower()
+    if fmt not in AGG_RENDERERS:
+        raise ValueError(f"Unsupported report format: {fmt!r} (use txt, json or html)")
+    path.write_text(AGG_RENDERERS[fmt](agg), encoding="utf-8")
+    return path

@@ -1,0 +1,67 @@
+"""Cross-platform build of the CipherCheck executables with PyInstaller.
+
+    python build.py            # run the tests, then build
+    python build.py --skip-tests
+
+Outputs go to release/ with a per-platform suffix:
+    Windows : ciphercheck.exe, ciphercheck-cli.exe          (also copied to the project root)
+    Linux   : ciphercheck-linux, ciphercheck-cli-linux
+    macOS   : ciphercheck-macos.zip (the .app), ciphercheck-cli-macos
+PyInstaller does not cross-compile: run this on each OS (the release workflow does).
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+RELEASE = ROOT / "release"
+DATA = f"data{os.pathsep}data"
+
+
+def run(*cmd: str) -> None:
+    print("+", " ".join(cmd), flush=True)
+    subprocess.run(cmd, check=True, cwd=ROOT)
+
+
+def pyinstaller(name: str, script: str, *flags: str) -> None:
+    run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--name", name,
+        "--add-data", DATA, *flags, script)
+
+
+def main() -> None:
+    if "--skip-tests" not in sys.argv:
+        run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", ".")
+    shutil.rmtree(RELEASE, ignore_errors=True)
+    RELEASE.mkdir()
+    dist = ROOT / "dist"
+
+    if sys.platform == "win32":
+        pyinstaller("ciphercheck", "ciphercheck.py", "--onefile", "--windowed")
+        pyinstaller("ciphercheck-cli", "ciphercheck_cli.py", "--onefile")
+        for exe in ("ciphercheck.exe", "ciphercheck-cli.exe"):
+            shutil.copy2(dist / exe, RELEASE / exe)
+            shutil.copy2(dist / exe, ROOT / exe)  # convenient copy in the project root
+    elif sys.platform == "darwin":
+        pyinstaller("ciphercheck", "ciphercheck.py", "--windowed")  # produces ciphercheck.app
+        pyinstaller("ciphercheck-cli", "ciphercheck_cli.py", "--onefile")
+        subprocess.run(["ditto", "-c", "-k", "--keepParent", str(dist / "ciphercheck.app"),
+                        str(RELEASE / "ciphercheck-macos.zip")], check=True)
+        shutil.copy2(dist / "ciphercheck-cli", RELEASE / "ciphercheck-cli-macos")
+    else:
+        pyinstaller("ciphercheck", "ciphercheck.py", "--onefile", "--windowed")
+        pyinstaller("ciphercheck-cli", "ciphercheck_cli.py", "--onefile")
+        shutil.copy2(dist / "ciphercheck", RELEASE / "ciphercheck-linux")
+        shutil.copy2(dist / "ciphercheck-cli", RELEASE / "ciphercheck-cli-linux")
+
+    print("\nBuilt:")
+    for f in sorted(RELEASE.iterdir()):
+        print(f"  {f.relative_to(ROOT)}  ({f.stat().st_size / 1e6:.1f} MB)")
+
+
+if __name__ == "__main__":
+    main()

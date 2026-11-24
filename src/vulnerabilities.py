@@ -35,6 +35,12 @@ def assess(a: Analysis) -> list[Vulnerability]:
             "Attackers try the most popular passwords first, so this one is typically guessed "
             "within the first few attempts, online or offline.",
             "Choose a password that is not on any popular list; use a password manager to generate it."))
+    if "breached" in kinds:
+        out.append(Vulnerability(
+            "Known / breached passwords", "critical", "Password found in a leaked-password list",
+            "This exact password is in a collection of leaked passwords that attackers use as a "
+            "ready-made guess list; it can be found almost immediately.",
+            "Stop using it everywhere and replace it with a new, unique password."))
     if a.length < 8:
         out.append(Vulnerability(
             "Length", "high", "Password is very short",

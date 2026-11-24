@@ -81,5 +81,50 @@ class VulnerabilityTests(unittest.TestCase):
             self.assertNotIn(pw, out)
 
 
+
+class BreachTests(unittest.TestCase):
+    def test_known_leaked_password_detected(self):
+        from src.breach import default_breach_db
+        db = default_breach_db()
+        self.assertIsNotNone(db)
+        self.assertGreater(db.size, 900_000)
+        self.assertTrue(db.contains("sunshine99"))
+        self.assertFalse(db.contains("Zq7!unique-Secret-Value-never-leaked"))
+
+    def test_breached_kind_and_report(self):
+        a = analyze("sunshine99")
+        self.assertIn("breached", a.pattern_kinds)
+        self.assertEqual(a.label, "VERY WEAK")
+        cats = {v.title for v in assess(a)}
+        self.assertIn("Password found in a leaked-password list", cats)
+
+    def test_small_custom_index(self):
+        import hashlib
+        from src.breach import BreachDB, PREFIX_BYTES
+        keys = sorted(hashlib.sha1(w.encode()).digest()[:PREFIX_BYTES] for w in ("alpha", "beta", "gamma"))
+        db = BreachDB(b"".join(keys))
+        self.assertTrue(db.contains("beta"))
+        self.assertFalse(db.contains("delta"))
+        with self.assertRaises(ValueError):
+            BreachDB(b"12345")
+
+
+class AggregateReportTests(unittest.TestCase):
+    def test_all_formats_without_passwords(self):
+        import tempfile
+        from pathlib import Path
+        pws = ["password", "sunshine99", "unique-marker-Zq7!x", "T7#mQ9!vLp2xK4"]
+        agg = report.aggregate([analyze(p) for p in pws])
+        self.assertEqual(agg["total"], 4)
+        self.assertTrue(agg["most_common_problems"])
+        with tempfile.TemporaryDirectory() as tmp:
+            for ext in ("txt", "json", "html"):
+                out = report.write_aggregate(agg, Path(tmp) / f"a.{ext}").read_text(encoding="utf-8")
+                self.assertIn("4", out)
+                self.assertNotIn("unique-marker", out)
+            with self.assertRaises(ValueError):
+                report.write_aggregate(agg, Path(tmp) / "a.pdf")
+
+
 if __name__ == "__main__":
     unittest.main()

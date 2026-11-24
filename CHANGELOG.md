@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-24
+
 ### Fixed
 - **Larger text no longer gets cut off at the sides.** With the `A+` button the panel now widens (up to the window), wrapped text follows its real width, rows of buttons stack when they no longer fit, the footer wraps, and the results area can no longer ask for more room than the panel has. At the biggest size the window also grows taller (up to the screen) so the results stay visible. A test checks every language at every text size.
 
@@ -89,7 +91,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/putridpunk/CipherCheck/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/putridpunk/CipherCheck/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/putridpunk/CipherCheck/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/putridpunk/CipherCheck/compare/v0.4.0...v0.5.0

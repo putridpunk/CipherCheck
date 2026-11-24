@@ -87,7 +87,7 @@ class Dictionary:
                 token = password[i:j]
                 for cand, leet in self._candidates(token):
                     if cand in self.words:
-                        subs = sum(a != b for a, b in zip(token.lower(), cand))
+                        subs = sum(a != b for a, b in zip(token.lower(), cand, strict=False))
                         out.append(Match("word", i, j,
                                          WORD_BITS + self._case_bits(token) + subs, leet))
                         break

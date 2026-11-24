@@ -44,7 +44,7 @@ jobs:
       - name: Build the Python package (wheel)
         if: runner.os == 'Linux'
         run: |
-                    python -m pip wheel . --no-deps --wheel-dir wheel_out
+          python -m pip wheel . --no-deps --wheel-dir wheel_out
           cp wheel_out/*.whl release/
 
       - name: Build the Windows installer

@@ -85,7 +85,7 @@ jobs:
           python-version: "3.12"
       - name: Build the wheel
         run: |
-                    python -m pip wheel . --no-deps --wheel-dir wheel_out
+          python -m pip wheel . --no-deps --wheel-dir wheel_out
           ls -l wheel_out
       - name: Install it in a clean environment and run it
         run: |

@@ -9,9 +9,9 @@ from pathlib import Path
 
 from . import __version__, hashes, report
 from .analyzer import analyze
+from .audit import audit_file
 from .friendly import generate_passphrase
 from .i18n import LANGUAGES
-from .reuse import ReuseTracker
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,6 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--lang", choices=sorted(LANGUAGES), metavar="CODE",
                    help="plain-language output in this language instead of the technical English "
                         f"report ({', '.join(sorted(LANGUAGES))}); also applies to TXT reports")
+    p.add_argument("-j", "--jobs", type=int, metavar="N",
+                   help="batch mode: worker processes (default: automatic, up to 8; 1 = single process)")
     p.add_argument("-r", "--report", type=Path, metavar="PATH", help="write a report to PATH")
     p.add_argument("--format", choices=sorted(report.RENDERERS), help="report format (default: from extension)")
     p.add_argument("-q", "--quiet", action="store_true", help="do not print the report to the terminal")
@@ -41,18 +43,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _batch(path: Path, args: argparse.Namespace) -> int:
-    analyses, tracker = [], ReuseTracker()
+    show = sys.stderr.isatty() and not args.quiet
+
+    def progress(lines: int, fraction: float) -> None:
+        if show:
+            print(f"\rAnalysing... {lines:,} passwords ({100 * fraction:.0f}%)", end="", file=sys.stderr, flush=True)
+
     try:
-        with path.open(encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                pw = line.rstrip("\r\n")
-                if pw:
-                    analyses.append(analyze(pw))
-                    tracker.add(pw)
+        agg = audit_file(path, workers=args.jobs, progress=progress)
     except OSError as exc:
         print(f"error: cannot read {path}: {exc}", file=sys.stderr)
         return 2
-    agg = report.aggregate(analyses, tracker.summary())
+    if show:
+        print("\r" + " " * 60 + "\r", end="", file=sys.stderr)
+    assert agg is not None  # only None when cancelled, and nothing cancels the CLI
     if not args.quiet:
         print(report.aggregate_friendly(agg, args.lang) if args.lang else report.aggregate_text(agg))
     if args.report:

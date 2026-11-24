@@ -29,8 +29,8 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb
 
-      - name: Install PyInstaller
-        run: python -m pip install pyinstaller
+      - name: Install PyInstaller (and tkinterdnd2, which adds drag and drop to the app)
+        run: python -m pip install pyinstaller tkinterdnd2
 
       - name: Build (runs the tests first)
         shell: bash
@@ -40,6 +40,13 @@ jobs:
           else
             python build.py
           fi
+
+      - name: Build the Python package (wheel)
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install build
+          python -m build --wheel --outdir wheel_out
+          cp wheel_out/*.whl release/
 
       - name: Build the Windows installer
         if: runner.os == 'Windows'

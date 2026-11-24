@@ -6,47 +6,63 @@ import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
-from types import SimpleNamespace
 
 from .. import report
-from ..analyzer import LABEL_ORDER, analyze
+from ..analyzer import LABEL_ORDER
+from ..audit import audit_file
 from ..friendly import KEY as KIND_KEY
 from ..friendly import LEVELS
-from ..reuse import ReuseTracker
-from .theme import DARKER, GREEN, PANEL, RED
+from .theme import DARKER, DIM, GREEN, PANEL, RED
 from .widgets import UI
+
+POLL_MS = 120
 
 
 class AuditTab:
     def __init__(self, ui: UI, page: tk.Frame):
         self.ui = ui
+        self.show_drop_hint = False  # set by the app when drag and drop is available
         self._agg: dict | None = None
-        self._n = 0
+        self._lines = 0
+        self._fraction = 0.0
         self._result: tuple[str, dict | None] | None = None
         self._thread: threading.Thread | None = None
-        self._status_job: str | None = None
+        self._cancel = threading.Event()
 
-        self.intro = ui.label(page, size=10, color="#2f9e4f", wraplength=600, justify="left")
-        self.intro.pack(padx=30, pady=(12, 8), fill="x")
+        self.intro = ui.label(page, size=10, color=DIM, wraplength=600, justify="left")
+        self.intro.pack(padx=30, pady=(12, 4), fill="x")
+        self.drop_hint = ui.label(page, size=9, color=DIM, wraplength=600, justify="left")
+        self.drop_hint.pack(padx=30, pady=(0, 6), fill="x")
         buttons = tk.Frame(page, bg=PANEL)
         buttons.pack()
         self.choose_btn = ui.button(buttons, self.choose_file)
         self.choose_btn.pack(side="left", padx=4)
+        self.cancel_btn = ui.button(buttons, self.cancel)
+        self.cancel_btn.pack(side="left", padx=4)
         self.save_btn = ui.button(buttons, self.save_report)
         self.save_btn.pack(side="left", padx=4)
         self.status = ui.label(page, size=10, wraplength=600)
         self.status.pack(pady=(8, 0))
+        self.progress = tk.Canvas(page, width=600, height=8, bg=PANEL, highlightthickness=0)
+        self.progress.pack(pady=(2, 0))
         self.total = ui.label(page, size=12, bold=True)
         self.total.pack(pady=(4, 4))
         self.chart = tk.Canvas(page, width=600, height=130, bg=PANEL, highlightthickness=0)
         self.chart.pack()
         self.text = ui.text_view(page, pady=(8, 16))
 
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
     def focus(self) -> None:
         self.ui.root.focus_set()
 
     def clear(self) -> None:
-        """Escape on this tab: forget the loaded statistics."""
+        """Escape on this tab: stop a running audit, or forget the loaded statistics."""
+        if self.running:
+            self.cancel()
+            return
         self._agg = None
         self.status.config(text="")
         self.render()
@@ -54,56 +70,87 @@ class AuditTab:
     def apply_language(self) -> None:
         ui = self.ui
         self.intro.config(text=ui.tr("au_intro"), justify="right" if ui.rtl else "left")
+        self.drop_hint.config(text=ui.tr("au_drop") if self.show_drop_hint else "")
         self.choose_btn.config(text=ui.tr("au_choose"))
+        self.cancel_btn.config(text=ui.tr("au_cancel"))
         self.save_btn.config(text=ui.tr("save_report"))
+        self._sync_buttons()
         self.render()
 
-    # ----- loading the file (background thread keeps the UI responsive) -----
+    def _sync_buttons(self) -> None:
+        busy = self.running
+        self.cancel_btn.config(state="normal" if busy else "disabled")
+        self.choose_btn.config(state="disabled" if busy else "normal")
+
+    # ----- running the audit (background thread keeps the window responsive) -----
     def choose_file(self) -> None:
-        if self._thread and self._thread.is_alive():
+        if self.running:
             return
         path = filedialog.askopenfilename(
             filetypes=[("Text", "*.txt *.lst *.csv *.dic"), ("All files", "*.*")])
-        if not path:
+        if path:
+            self.start(path)
+
+    def start(self, path: str) -> None:
+        """Audit `path` (from the file dialog or a dropped file)."""
+        if self.running:
             return
-        self._n, self._result = 0, None
-        self._thread = threading.Thread(target=self._worker, args=(path,), daemon=True)
+        self._lines, self._fraction, self._result = 0, 0.0, None
+        self._cancel = threading.Event()
+        self._thread = threading.Thread(target=self._worker, args=(path, self._cancel), daemon=True)
         self._thread.start()
+        self._sync_buttons()
         self._poll()
 
-    def _worker(self, path: str) -> None:
-        stats = []
-        tracker = ReuseTracker()
+    def cancel(self) -> None:
+        self._cancel.set()
+
+    def report_error(self) -> None:
+        """Something that is not a readable file was dropped or chosen."""
+        self.status.config(text=self.ui.tr("au_error"), fg=RED)
+
+    def _on_progress(self, lines: int, fraction: float) -> None:
+        self._lines, self._fraction = lines, fraction
+
+    def _worker(self, path: str, cancel: threading.Event) -> None:
         try:
-            with open(path, encoding="utf-8", errors="replace") as fh:
-                for line in fh:
-                    pw = line.rstrip("\r\n")
-                    if not pw:
-                        continue
-                    a = analyze(pw)  # only aggregate numbers are kept, never the password
-                    stats.append(SimpleNamespace(label=a.label, pattern_kinds=a.pattern_kinds,
-                                                 estimated_bits=a.estimated_bits, length=a.length))
-                    tracker.add(pw)
-                    self._n = len(stats)
+            agg = audit_file(path, progress=self._on_progress, cancel=cancel)
         except OSError:
             self._result = ("error", None)
             return
-        self._result = ("done", report.aggregate(stats, tracker.summary())) if stats else ("empty", None)
+        if agg is None:
+            self._result = ("cancelled", None)
+        elif agg["total"] == 0:
+            self._result = ("empty", None)
+        else:
+            self._result = ("done", agg)
 
     def _poll(self) -> None:
+        self._draw_progress(self._fraction if self._result is None else 0.0)
         if self._result is None:
-            self.status.config(text=self.ui.tr("au_working", n=self._n), fg=GREEN)
-            self.ui.root.after(150, self._poll)
+            pct = f"{100 * self._fraction:.0f}"
+            self.status.config(text=self.ui.tr("au_working", n=f"{self._lines:,}", pct=pct), fg=GREEN)
+            self.ui.root.after(POLL_MS, self._poll)
             return
         kind, agg = self._result
         if kind == "done":
             self._agg = agg
             self.status.config(text="")
         else:
-            self._agg = None
-            self.status.config(text=self.ui.tr("au_error" if kind == "error" else "au_empty"), fg=RED)
+            key = {"error": "au_error", "empty": "au_empty", "cancelled": "au_cancelled"}[kind]
+            self.status.config(text=self.ui.tr(key), fg=RED if kind != "cancelled" else DIM)
+            if kind != "cancelled":
+                self._agg = None
+        self._sync_buttons()
         self.render()
 
+    def stop_for_close(self) -> None:
+        """Called when the window is closing: stop the audit and give its workers a moment."""
+        self._cancel.set()
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+
+    # ----- report -----
     def save_report(self) -> None:
         if not self._agg:
             self.status.config(text=self.ui.tr("au_empty"), fg=RED)
@@ -122,6 +169,12 @@ class AuditTab:
         self.status.config(text="> " + self.ui.tr("st_report", path=path), fg=GREEN)
 
     # ----- rendering -----
+    def _draw_progress(self, fraction: float) -> None:
+        self.progress.delete("all")
+        if fraction > 0:
+            self.progress.create_rectangle(0, 0, 600, 8, fill=DARKER, outline="")
+            self.progress.create_rectangle(0, 0, int(600 * fraction), 8, fill=GREEN, outline="")
+
     def render(self) -> None:
         ui, c, agg = self.ui, self.chart, self._agg
         c.delete("all")

@@ -144,17 +144,22 @@ class Summarisable(Protocol):
 
 
 def aggregate(analyses: Sequence[Summarisable], reuse: dict | None = None) -> dict:
-    n = len(analyses)
-    labels = Counter(a.label for a in analyses)
-    kinds = Counter(k for a in analyses for k in a.pattern_kinds)
+    return aggregate_counts(
+        len(analyses), Counter(a.label for a in analyses),
+        Counter(k for a in analyses for k in a.pattern_kinds),
+        sum(a.estimated_bits for a in analyses), sum(a.length for a in analyses), reuse)
+
+
+def aggregate_counts(n: int, labels: Counter, kinds: Counter, bits_sum: float, length_sum: int,
+                     reuse: dict | None = None) -> dict:
     return {
         "tool": "CipherCheck",
         "version": __version__,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "total": n,
         "assessment_counts": {lbl: labels.get(lbl, 0) for lbl in LABEL_ORDER},
-        "average_estimated_bits": round(sum(a.estimated_bits for a in analyses) / n, 1) if n else 0,
-        "average_length": round(sum(a.length for a in analyses) / n, 1) if n else 0,
+        "average_estimated_bits": round(bits_sum / n, 1) if n else 0,
+        "average_length": round(length_sum / n, 1) if n else 0,
         "pattern_counts": dict(kinds.most_common()),
         "reuse": reuse or {"exact_duplicates": 0, "similar_to_another": 0, "similar_groups": 0},
         "most_common_problems": [

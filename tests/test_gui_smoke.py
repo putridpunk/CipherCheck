@@ -6,6 +6,7 @@ Skipped automatically when no display is available (use xvfb on headless Linux).
 import os
 import sys
 import tempfile
+import time
 import tkinter as tk
 import unittest
 from pathlib import Path
@@ -111,10 +112,78 @@ class GuiSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "synthetic.txt"
             path.write_text("password\nsunshine99\nT7#mQ9!vLp2xK4\n", encoding="utf-8")
-            tab._worker(str(path))
+            tab.start(str(path))
+            for _ in range(200):  # the audit runs in a thread; the UI polls for the result
+                self.root.update()
+                if tab._result is not None and not tab.running:
+                    break
+                time.sleep(0.05)
             tab._poll()
         self.assertEqual(tab._agg["total"], 3)
+        self.assertFalse(tab.running)
         self.root.update()
+
+    def test_audit_cancel_and_missing_file(self):
+        tab = self.app.tabs["audit"]
+        tab.start(str(Path(tempfile.gettempdir()) / "ciphercheck-does-not-exist.txt"))
+        for _ in range(100):
+            self.root.update()
+            if tab._result is not None and not tab.running:
+                break
+            time.sleep(0.05)
+        tab._poll()
+        self.assertEqual(tab._result, ("error", None))
+        tab.clear()  # nothing running: just forgets statistics
+
+
+class GuiDropTests(unittest.TestCase):
+    """Drag and drop needs the optional tkinterdnd2 package."""
+
+    def setUp(self):
+        try:
+            from tkinterdnd2 import TkinterDnD
+        except ImportError:
+            self.skipTest("tkinterdnd2 is not installed")
+        if sys.platform == "darwin" and os.environ.get("CI"):
+            self.skipTest("GUI smoke test skipped on macOS CI")
+        try:
+            self.root = TkinterDnD.Tk()
+        except Exception:
+            self.skipTest("no display or no tkdnd library available")
+        self.root.withdraw()
+        self._cfg = tempfile.TemporaryDirectory()
+        os.environ["CIPHERCHECK_CONFIG_DIR"] = self._cfg.name
+        from src.gui import App
+        self.app = App(self.root)
+
+    def tearDown(self):
+        self.root.destroy()
+        os.environ.pop("CIPHERCHECK_CONFIG_DIR", None)
+        self._cfg.cleanup()
+
+    def test_drop_starts_an_audit(self):
+        from types import SimpleNamespace
+        self.assertTrue(self.app.tabs["audit"].show_drop_hint)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "my passwords.txt"  # a space: Tk wraps such paths in braces
+            path.write_text("password\nT7#mQ9!vLp2xK4\n", encoding="utf-8")
+            self.app.on_drop(SimpleNamespace(data="{" + str(path).replace("\\", "/") + "}"))
+            self.assertEqual(self.app.current_tab, "audit")
+            tab = self.app.tabs["audit"]
+            for _ in range(200):
+                self.root.update()
+                if tab._result is not None and not tab.running:
+                    break
+                time.sleep(0.05)
+            tab._poll()
+        self.assertEqual(tab._agg["total"], 2)
+
+    def test_drop_of_a_folder_reports_an_error(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as tmp:
+            self.app.on_drop(SimpleNamespace(data=tmp.replace("\\", "/")))
+        self.assertFalse(self.app.tabs["audit"].running)
+        self.assertTrue(self.app.tabs["audit"].status.cget("text"))
 
 
 if __name__ == "__main__":

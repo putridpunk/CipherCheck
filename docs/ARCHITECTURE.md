@@ -14,7 +14,7 @@ gui/app.py ── tabs: analyze_tab (analyze + friendly.explain) ── audit_ta
 
 `src/gui/` keeps each tab in its own module; `widgets.UI` creates themed widgets and
 re-applies per-script fonts when the language changes. Data files and their origin are
-described in `data/README.md`; `tools/build_data.py` regenerates them.
+described in `src/data/README.md`; `tools/build_data.py` regenerates them.
 
 ## Entropy estimation
 

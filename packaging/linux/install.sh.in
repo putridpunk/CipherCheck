@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# CipherCheck - install the downloaded Linux binaries for the current user (no root needed).
+#
+#   bash ciphercheck-linux-install.sh              # looks for ciphercheck-linux next to this script
+#   bash ciphercheck-linux-install.sh PATH         # use the binary at PATH
+#   bash ciphercheck-linux-install.sh --uninstall
+#
+# Installs the app as ~/.local/bin/ciphercheck-gui (menu entry "CipherCheck") and, if
+# ciphercheck-cli-linux is next to it, the terminal tool as ~/.local/bin/ciphercheck.
+set -euo pipefail
+
+bin_dir="${XDG_BIN_HOME:-$HOME/.local/bin}"
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
+desktop_file="$data_dir/applications/ciphercheck.desktop"
+icon_file="$data_dir/icons/hicolor/256x256/apps/ciphercheck.png"
+
+refresh_caches() {
+    update-desktop-database -q "$data_dir/applications" 2>/dev/null || true
+    gtk-update-icon-cache -q -t "$data_dir/icons/hicolor" 2>/dev/null || true
+}
+
+if [ "${1:-}" = "--uninstall" ]; then
+    rm -f "$bin_dir/ciphercheck-gui" "$bin_dir/ciphercheck" "$desktop_file" "$icon_file"
+    refresh_caches
+    echo "CipherCheck removed."
+    exit 0
+fi
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+app_src="${1:-$here/ciphercheck-linux}"
+if [ ! -f "$app_src" ]; then
+    echo "Cannot find the app binary: $app_src" >&2
+    echo "Download ciphercheck-linux from the release page, put it next to this script, and run again." >&2
+    exit 1
+fi
+cli_src="$(dirname "$app_src")/ciphercheck-cli-linux"
+
+mkdir -p "$bin_dir" "$(dirname "$desktop_file")" "$(dirname "$icon_file")"
+install -m 755 "$app_src" "$bin_dir/ciphercheck-gui"
+if [ -f "$cli_src" ]; then
+    install -m 755 "$cli_src" "$bin_dir/ciphercheck"
+fi
+
+base64 -d > "$icon_file" <<'ICON'
+@ICON_B64@
+ICON
+
+cat > "$desktop_file" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=CipherCheck
+Comment=Offline password security auditor
+Exec=$bin_dir/ciphercheck-gui
+Icon=ciphercheck
+Terminal=false
+Categories=Utility;Security;
+Keywords=password;security;audit;entropy;hash;
+StartupNotify=false
+DESKTOP
+refresh_caches
+
+echo "Installed to $bin_dir (menu entry: CipherCheck)."
+case ":$PATH:" in
+    *":$bin_dir:"*) ;;
+    *) echo "Note: $bin_dir is not in your PATH; add it to run 'ciphercheck' from a terminal." ;;
+esac

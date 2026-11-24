@@ -10,7 +10,7 @@ licensor through https://github.com/putridpunk .
 Personal, educational, research and other noncommercial use is allowed under
 the terms below.
 
-Third-party data bundled in data/ keeps its own licence (see data/README.md).
+Third-party data bundled in src/data/ keeps its own licence (see src/data/README.md).
 
 ------------------------------------------------------------------------------
 

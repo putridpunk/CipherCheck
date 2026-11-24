@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import secrets
 import string
+from functools import lru_cache
 from dataclasses import dataclass, field
 
 from .analyzer import Analysis, analyze
@@ -171,7 +172,13 @@ def strengthen(password: str) -> str:
 
 def generate_passphrase(words: int = 5, separator: str = "-") -> str:
     """Random words from the EFF list (about 12.9 bits each; five words ~ 65 bits)."""
-    pool = passphrase_words()
+    pool = _generator_pool()
     if not pool:
         raise RuntimeError("passphrase word list is missing")
     return separator.join(secrets.choice(pool) for _ in range(words))
+
+
+@lru_cache(maxsize=1)
+def _generator_pool() -> tuple[str, ...]:
+    """EFF words without hyphens, so the words of "a-b-c-d-e" can always be told apart."""
+    return tuple(w for w in passphrase_words() if "-" not in w)

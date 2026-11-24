@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CipherCheck
+Comment=Offline password security auditor
+Exec=ciphercheck-gui
+Icon=ciphercheck
+Terminal=false
+Categories=Utility;Security;
+Keywords=password;security;audit;entropy;hash;

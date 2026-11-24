@@ -5,13 +5,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-24
+
 ### Added
-- CI now runs `ruff`, `mypy` and a coverage report (minimum 80%).
-- README badges.
+- **Large files in the Audit tab and `-f`:** analysed on all CPU cores in chunks (about 3x faster on 4 cores in my test, more on 8+), with a progress bar, a **Cancel** button and a `-j/--jobs` option for the CLI. Results are identical to the single-process run.
+- **Drag and drop:** drop a password file anywhere on the window to audit it (optional `tkinterdnd2` package; bundled in the release executables).
+- **Python package:** `pyproject.toml`; install the wheel with `pipx install` to get the `ciphercheck` and `ciphercheck-gui` commands. Releases now include the wheel.
+- **Linux:** `ciphercheck-linux-install.sh` adds a menu entry and icon (per user, no root) and can uninstall.
+- **macOS:** the app now carries a bundle identifier.
+- CI builds the wheel and runs it in a clean environment; `ruff`, `mypy` and a coverage report (minimum 80%); README badges.
 
 ### Changed
-- `.gitattributes` normalises line endings to LF.
-- Small code clean-ups found by the new checks (unused imports, type hints).
+- The bundled data and icons moved from `data/` and `assets/` to `src/data/` and `src/assets/` (they ship inside the package).
+- Closing the window stops a running audit and its worker processes.
+- The passphrase generator never picks hyphenated words, so the words of `a-b-c-d-e` are always unambiguous.
+- `.gitattributes` normalises line endings to LF; small clean-ups found by the new checks.
 
 ## [0.5.0] - 2026-11-24
 
@@ -67,7 +75,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/putridpunk/CipherCheck/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/putridpunk/CipherCheck/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/putridpunk/CipherCheck/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/putridpunk/CipherCheck/compare/v0.2.0...v0.3.0

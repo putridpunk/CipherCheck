@@ -2,7 +2,7 @@
 
     python tools/make_icon.py
 
-Writes assets/: ciphercheck.png (256), ciphercheck.ico, ciphercheck.icns.
+Writes src/assets/: ciphercheck.png (256), ciphercheck.ico, ciphercheck.icns.
 No third-party packages are needed (own PNG/ICO/ICNS writers).
 """
 
@@ -13,7 +13,7 @@ import struct
 import zlib
 from pathlib import Path
 
-ASSETS = Path(__file__).resolve().parent.parent / "assets"
+ASSETS = Path(__file__).resolve().parent.parent / "src" / "assets"
 
 BG = (3, 22, 12)
 GREEN = (0, 255, 65)

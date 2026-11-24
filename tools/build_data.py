@@ -1,4 +1,4 @@
-"""Regenerates the bundled datasets in data/ from a frequency-ordered password list.
+"""Regenerates the bundled datasets in src/data/ from a frequency-ordered password list.
 
 Usage:
     python tools/build_data.py PATH/TO/xato-net-10-million-passwords-1000000.txt
@@ -6,9 +6,9 @@ Usage:
 The source list is SecLists (MIT licence, https://github.com/danielmiessler/SecLists),
 ordered from most to least common. Outputs:
 
-* data/common_passwords.txt  top 100,000 entries (rank = line order, used for scoring)
-* data/common_words.txt      curated words + frequent purely-alphabetic entries
-* data/breached.bin          sorted 6-byte SHA-1 prefixes of all entries (offline leak check)
+* src/data/common_passwords.txt  top 100,000 entries (rank = line order, used for scoring)
+* src/data/common_words.txt    curated words + frequent purely-alphabetic entries
+* src/data/breached.bin          sorted 6-byte SHA-1 prefixes of all entries (offline leak check)
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ import re
 import sys
 from pathlib import Path
 
-DATA = Path(__file__).resolve().parent.parent / "data"
+DATA = Path(__file__).resolve().parent.parent / "src" / "data"
 TOP_PASSWORDS = 100_000
 EXTRA_WORDS = 8_000
 PREFIX_BYTES = 6

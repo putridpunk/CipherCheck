@@ -6,12 +6,14 @@ import string
 import sys
 from pathlib import Path
 
-# When frozen by PyInstaller, bundled data is unpacked under sys._MEIPASS.
+# Bundled files live next to this package; when frozen by PyInstaller they are
+# unpacked under sys._MEIPASS instead.
 if getattr(sys, "frozen", False):
-    ROOT_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    _BASE = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
 else:
-    ROOT_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT_DIR / "data"
+    _BASE = Path(__file__).resolve().parent
+DATA_DIR = _BASE / "data"
+ASSETS_DIR = _BASE / "assets"
 
 LOWER = set(string.ascii_lowercase)
 UPPER = set(string.ascii_uppercase)

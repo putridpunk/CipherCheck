@@ -149,7 +149,7 @@ class PassphraseTests(unittest.TestCase):
         from src.friendly import generate_passphrase
         self.assertEqual(len(passphrase_words()), 7776)
         p = generate_passphrase(5)
-        self.assertEqual(len(p.split("-")), 5)
+        self.assertEqual(len(p.split("-")), 5)  # the generator never picks hyphenated words
         self.assertNotEqual(p, generate_passphrase(5))
         self.assertTrue(all(w in passphrase_words() for w in p.split("-")))
         self.assertIn(analyze(p).label, ("STRONG", "VERY STRONG"))
@@ -204,6 +204,75 @@ class CliLanguageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = report.write_report(analyze("password"), Path(tmp) / "r.txt", lang="pt")
             self.assertIn("MUITO FRACA", out.read_text(encoding="utf-8"))
+
+
+class AuditFileTests(unittest.TestCase):
+    PASSWORDS = (["password", "sunshine99", "Summer2024!", "summer2025", "qwerty", "hello"] * 40
+                 + ["Zq7!unique-Secret-Value", "T7#mQ9!vLp2xK4", "correct-horse-battery-staple"] * 10)
+
+    def _file(self, tmp):
+        from pathlib import Path
+        path = Path(tmp) / "synthetic.txt"
+        path.write_text("\n".join(self.PASSWORDS) + "\n", encoding="utf-8")
+        return path
+
+    def test_parallel_matches_single_process(self):
+        import tempfile
+        from src.audit import audit_file
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp)
+            single = audit_file(path, workers=1)
+            parallel = audit_file(path, workers=2, chunk_lines=37)
+        for key in ("total", "assessment_counts", "pattern_counts", "reuse",
+                    "average_estimated_bits", "average_length"):
+            self.assertEqual(single[key], parallel[key], key)
+        self.assertEqual(single["total"], len(self.PASSWORDS))
+        self.assertGreater(single["reuse"]["exact_duplicates"], 0)
+        self.assertGreater(single["reuse"]["similar_to_another"], 0)
+
+    def test_progress_and_cancel(self):
+        import tempfile
+        import threading
+        from src.audit import audit_file
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp)
+            calls = []
+            audit_file(path, workers=1, chunk_lines=50, progress=lambda n, f: calls.append((n, f)))
+            self.assertGreater(len(calls), 3)
+            self.assertAlmostEqual(calls[-1][1], 1.0)
+            self.assertEqual(calls[-1][0], len(self.PASSWORDS))
+            done = threading.Event()
+            done.set()
+            self.assertIsNone(audit_file(path, workers=1, cancel=done))
+            self.assertIsNone(audit_file(path, workers=2, chunk_lines=20, cancel=done))
+
+    def test_missing_file_and_empty_lines(self):
+        import tempfile
+        from pathlib import Path
+        from src.audit import audit_file
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(OSError):
+                audit_file(Path(tmp) / "nope.txt")
+            empty = Path(tmp) / "empty.txt"
+            empty.write_text("\n\n", encoding="utf-8")
+            self.assertEqual(audit_file(empty)["total"], 0)
+
+    def test_stable_hash_and_merge(self):
+        from src.reuse import ReuseTracker, stable_hash
+        self.assertEqual(stable_hash("abc"), stable_hash("abc"))
+        a, b = ReuseTracker(), ReuseTracker()
+        a.add("Summer2024!")
+        b.add("summer2025")
+        b.add("Summer2024!")
+        a.merge(b)
+        s = a.summary()
+        self.assertEqual((s["exact_duplicates"], s["similar_to_another"]), (2, 3))
+
+    def test_cli_jobs_option(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._file(tmp)
+            self.assertEqual(main(["-f", str(path), "-j", "1", "-q"]), 0)
 
 
 if __name__ == "__main__":

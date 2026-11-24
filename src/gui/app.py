@@ -5,10 +5,12 @@ from __future__ import annotations
 import sys
 import tkinter as tk
 import webbrowser
+from pathlib import Path
+from typing import Any
 
 from .. import __version__, settings
 from ..i18n import LANGUAGES, detect_language
-from ..utils import ROOT_DIR
+from ..utils import ASSETS_DIR
 from .analyze_tab import AnalyzeTab
 from .audit_tab import AuditTab
 from .hash_tab import HashTab
@@ -18,7 +20,7 @@ from .widgets import UI
 
 TAB_CLASSES = {"analyze": AnalyzeTab, "audit": AuditTab, "hash": HashTab}
 REPO_URL = "https://github.com/putridpunk/CipherCheck"
-ICON = ROOT_DIR / "assets" / "ciphercheck.png"
+ICON = ASSETS_DIR / "ciphercheck.png"
 
 
 class App:
@@ -30,6 +32,7 @@ class App:
         root.geometry(f"1000x{height}")
         root.minsize(900, 600)
         self._set_icon()
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         prefs = settings.load()
         lang = prefs.get("language")
@@ -47,6 +50,7 @@ class App:
         self._build_tabs()
         self._build_corner_controls()
         self._bind_shortcuts()
+        self._enable_drop()
 
         self._blink = True
         self._blink_title()
@@ -133,6 +137,33 @@ class App:
             b.config(bg=GREEN if on else BG, fg=BG if on else GREEN)
         self.tabs[name].focus()
 
+    def _enable_drop(self) -> None:
+        """Let the user drop a password file anywhere on the window (needs the optional
+        tkinterdnd2 package; without it the app works exactly the same, minus dropping)."""
+        if not hasattr(self.root, "drop_target_register"):
+            return
+        try:
+            from tkinterdnd2 import DND_FILES
+            widgets: list[Any] = [self.root, self.canvas, self.panel]  # tkinterdnd2 adds the methods
+            for widget in widgets:
+                widget.drop_target_register(DND_FILES)
+                widget.dnd_bind("<<Drop>>", self.on_drop)
+        except Exception:  # missing native library, unsupported platform...
+            return
+        self.tabs["audit"].show_drop_hint = True
+
+    def on_drop(self, event: Any) -> str:
+        """A file was dropped on the window: audit it."""
+        audit = self.tabs["audit"]
+        self.show_tab("audit")
+        paths = [Path(p) for p in self.root.tk.splitlist(event.data)]
+        files = [p for p in paths if p.is_file()]
+        if files:
+            audit.start(str(files[0]))
+        else:
+            audit.report_error()
+        return "copy"
+
     def _font_command(self, step: int):
         return lambda: self.change_font(step)
 
@@ -152,6 +183,10 @@ class App:
         self.ui.lang = next(code for code, n in LANGUAGES.items() if n == name)
         settings.save(language=self.ui.lang)
         self.apply_language()
+
+    def on_close(self) -> None:
+        self.tabs["audit"].stop_for_close()
+        self.root.destroy()
 
     def apply_language(self) -> None:
         ui = self.ui
@@ -175,6 +210,10 @@ def run() -> None:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
-    root = tk.Tk()
+    try:  # optional: adds drag-and-drop of files onto the window
+        from tkinterdnd2 import TkinterDnD
+        root: tk.Tk = TkinterDnD.Tk()
+    except Exception:
+        root = tk.Tk()
     App(root)
     root.mainloop()

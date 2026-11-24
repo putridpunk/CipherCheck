@@ -1,6 +1,6 @@
 # Bundled data
 
-The data files below are **not** covered by the project licence in `../LICENSE`; each keeps the licence of its source.
+The data files below are **not** covered by the project licence in `../../LICENSE`; each keeps the licence of its source.
 
 | File | What it is | Licence |
 | --- | --- | --- |

@@ -18,7 +18,7 @@ Everything runs locally: no network access, no telemetry, and exported reports n
 
 ## Licence
 
-CipherCheck is **source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE)**, not open source. You may use, study and modify it for personal, educational, research and other noncommercial purposes. **Selling it, offering it as a paid product or service, or otherwise earning income from it requires the author's prior written authorization** - contact the author through [github.com/putridpunk](https://github.com/putridpunk). The bundled datasets keep their own licences (see [`data/README.md`](data/README.md)). This is not legal advice.
+CipherCheck is **source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE)**, not open source. You may use, study and modify it for personal, educational, research and other noncommercial purposes. **Selling it, offering it as a paid product or service, or otherwise earning income from it requires the author's prior written authorization** - contact the author through [github.com/putridpunk](https://github.com/putridpunk). The bundled datasets keep their own licences (see [`src/data/README.md`](src/data/README.md)). This is not legal advice.
 
 Contributions are welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md). Found a security problem? Please read [`SECURITY.md`](SECURITY.md) first. What changed in each version: [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -34,10 +34,14 @@ Contributions are welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md). Found a sec
 
 The executables are not code-signed, so Windows SmartScreen / macOS Gatekeeper may warn you the first time (Windows: More info > Run anyway; macOS: right-click > Open). The Linux and macOS builds are produced by CI and have not been tested by hand.
 
+**Linux menu entry:** download `ciphercheck-linux-install.sh` next to the binaries and run `bash ciphercheck-linux-install.sh`. It installs for the current user (no root): the app as `~/.local/bin/ciphercheck-gui` with a "CipherCheck" menu entry and icon, and the terminal tool as `ciphercheck`. Remove it again with `--uninstall`.
+
+**With Python (any OS):** every release also has a wheel (`ciphercheck-*.whl`). `pipx install ciphercheck-*.whl` gives you the commands `ciphercheck` (terminal) and `ciphercheck-gui` (app); add `[dnd]` for drag and drop, e.g. `pipx install "ciphercheck-0.6.0-py3-none-any.whl[dnd]"`. From a checkout: `pip install .`.
+
 The app has a Matrix/hacker theme and speaks plain language, in 9 languages (English, Português, Español, Français, Deutsch, Русский, العربية, 日本語, 简体中文). Pick one from the menu in the top-right corner; the choice is remembered, and the first launch follows your system language.
 
 - **Analyze**: type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. *Generate strong password* turns what you typed into a strong password that still resembles it (or creates a brand-new one if the field is empty). *Generate passphrase* makes five random words from the 7,776-word EFF list (about 65 bits, easy to remember). Copying wipes the clipboard after 30 s, and *Save report* exports TXT / JSON / HTML.
-- **Audit**: pick a file of **synthetic** test passwords (one per line) and get a statistics dashboard: strength distribution, most common problems, passwords reused and near-copies of each other (`Summer2024!` / `summer2025`). Passwords are never shown or saved; the summary can be exported.
+- **Audit**: pick a file of **synthetic** test passwords (one per line), or **drag the file onto the window**, and get a statistics dashboard: strength distribution, most common problems, passwords reused and near-copies of each other (`Summer2024!` / `summer2025`). Big files are analysed on all CPU cores (several times faster than one core), with a progress bar and a *Cancel* button. Passwords are never shown or saved; the summary can be exported. Dragging needs the optional `tkinterdnd2` package, which the release executables include.
 - **Hash**: paste a hash to see which formats it could be and whether they suit password storage. Only the format is checked; nothing is cracked.
 
 Handy extras: `Ctrl+1/2/3` switch tabs, `Ctrl+G` generates a password, `Esc` clears the current input, and the `A−` / `A+` buttons (top-left) change the text size; both the language and the text size are remembered. The footer shows the version and links to this repository.
@@ -59,6 +63,7 @@ python -m src.main                       # prompts for the password (input hidde
 python -m src.main --stdin               # read one password from stdin
 python -m src.main -r report.html        # also export a report (txt / json / html)
 python -m src.main -f samples.txt -q -r summary.html   # batch mode: aggregate stats only
+python -m src.main -f big.txt -j 4       # ... on 4 worker processes (default: automatic)
 python -m src.main --hash 5f4dcc3b5aa765d61d8327deb882cf99   # identify a hash format (never cracks it)
 python -m src.main --passphrase          # a random 5-word passphrase (3 to 12 words)
 python -m src.main -p "example" --lang pt   # plain-language output in another language
@@ -73,9 +78,10 @@ python -m src.main -p "example" --lang pt   # plain-language output in another l
 | `src/entropy.py` | Theoretical entropy `H = L·log2(R)` **and** a pattern-aware estimate (minimum-cost cover via dynamic programming), plus crack-time estimates |
 | `src/patterns.py` | Sequences, repeated characters/blocks, keyboard walks, years |
 | `src/dictionary.py` | Local common-password list, word lists (incl. the EFF passphrase list), leetspeak normalisation (`p@ssw0rd` → `password`) |
-| `src/breach.py` | Offline leaked-password check against `data/breached.bin` (nothing leaves your computer) |
+| `src/breach.py` | Offline leaked-password check against `src/data/breached.bin` (nothing leaves your computer) |
 | `src/analyzer.py` | Combines everything into a label, score, findings and recommendations |
 | `src/reuse.py` | Finds identical passwords and near-copies inside a dataset (only hashes are kept in memory) |
+| `src/audit.py` | Audits a whole file on all CPU cores, in chunks, with progress and cancel; only counters come back |
 | `src/report.py` | TXT / JSON / HTML reports, batch aggregation and translated plain-language text |
 | `src/vulnerabilities.py` | Turns an analysis into categorised weaknesses (severity, why it matters, how to fix) for the detailed reports |
 | `src/hashes.py` | Identifies hash formats (MD5, SHA-*, bcrypt, Argon2, ...) and explains their password-storage properties; a format match is a hint, never proof of origin |
@@ -93,7 +99,7 @@ Assessment thresholds (estimated bits): `<28` very weak · `<40` weak · `<60` m
 
 - Arabic is shaped and right-aligned correctly, but Tk has no right-to-left paragraph support, so punctuation and the `[-]` markers can sit on the wrong side of a line.
 - The translations are not yet reviewed by native speakers (corrections welcome, see `CONTRIBUTING.md`).
-- Bundled data (see `data/README.md`): the 100k most common passwords and an 8k-word vocabulary for scoring, plus an offline index of the ~1M most common leaked passwords. The leak check is not a complete breach database: not being found does not prove a password never leaked.
+- Bundled data (see `src/data/README.md`): the 100k most common passwords and an 8k-word vocabulary for scoring, plus an offline index of the ~1M most common leaked passwords. The leak check is not a complete breach database: not being found does not prove a password never leaked.
 - Entropy and crack-time numbers are models, not guarantees.
 - `correct-horse-battery` scores *moderate* (~43 bits): three common words are not enough. It is flagged as a passphrase, and five random words reach strong.
 
@@ -103,11 +109,11 @@ Assessment thresholds (estimated bits): `<28` very weak · `<40` weak · `<60` m
 python -m unittest discover -s tests -t .
 ```
 
-CI also runs `ruff` (rules in `ruff.toml`), `mypy` (`mypy.ini`) and a coverage report that must stay at or above 80% (currently ~88%). To check locally: `pip install ruff mypy coverage`, then `ruff check .`, `mypy` and `coverage run -m unittest discover -s tests -t . && coverage report`. Line endings are normalised to LF by `.gitattributes`.
+CI also builds the wheel and runs it in a clean environment, and runs `ruff` (rules in `ruff.toml`), `mypy` (`mypy.ini`) and a coverage report that must stay at or above 80% (currently ~88%). To check locally: `pip install ruff mypy coverage`, then `ruff check .`, `mypy` and `coverage run -m unittest discover -s tests -t . && coverage report`. Line endings are normalised to LF by `.gitattributes`.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs the tests on Linux, Windows and macOS (Python 3.10 and 3.13; the GUI smoke tests run under a virtual display on Linux). `.github/workflows/release.yml` builds the executables on all three systems and the Windows installer (`installer/ciphercheck.iss`, Inno Setup); pushing a tag such as `v0.4.0` attaches them to a GitHub Release, and running it manually only produces downloadable artifacts. Dependabot keeps the GitHub Actions versions current.
+`.github/workflows/ci.yml` runs the tests on Linux, Windows and macOS (Python 3.10 and 3.13; the GUI smoke tests run under a virtual display on Linux). `.github/workflows/release.yml` builds the executables on all three systems, the Windows installer (`installer/ciphercheck.iss`, Inno Setup), the Linux install script and the Python wheel; pushing a tag such as `v0.4.0` attaches them to a GitHub Release, and running it manually only produces downloadable artifacts. Dependabot keeps the GitHub Actions versions current.
 
 ## Roadmap
 

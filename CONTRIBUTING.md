@@ -31,7 +31,7 @@ python build.py                                # build executables (needs: pip i
 
 ## Project layout
 
-See `README.md` and `docs/ARCHITECTURE.md`. Bundled data and its origin are described in `data/README.md`.
+See `README.md` and `docs/ARCHITECTURE.md`. Bundled data and its origin are described in `src/data/README.md`.
 
 ## Reporting a problem
 

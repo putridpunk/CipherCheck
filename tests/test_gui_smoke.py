@@ -3,6 +3,8 @@
 Skipped automatically when no display is available (use xvfb on headless Linux).
 """
 
+import os
+import sys
 import tempfile
 import tkinter as tk
 import unittest
@@ -20,6 +22,10 @@ def _root():
 
 class GuiSmokeTests(unittest.TestCase):
     def setUp(self):
+        self.root = None
+        if sys.platform == "darwin" and os.environ.get("CI"):
+            # Opening a Tk window on a headless macOS CI runner can hang forever.
+            self.skipTest("GUI smoke test skipped on macOS CI")
         self.root = _root()
         if self.root is None:
             self.skipTest("no display available")

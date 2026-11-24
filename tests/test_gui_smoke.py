@@ -52,6 +52,39 @@ class GuiSmokeTests(unittest.TestCase):
                 app.show_tab(tab)
                 self.root.update()
 
+    def test_font_scale_steps_and_is_remembered(self):
+        from src import settings
+        base = self.app.ui.size(11)
+        self.app.change_font(1)
+        self.assertEqual(self.app.ui.scale, 1.15)
+        self.assertGreater(self.app.ui.size(11), base)
+        self.assertEqual(settings.load()["font_scale"], 1.15)
+        for _ in range(5):
+            self.app.change_font(-1)  # stops at the smallest step
+        self.assertEqual(self.app.ui.scale, 0.9)
+        self.root.update()
+
+    def test_shortcuts(self):
+        app = self.app
+        # Real key events need window focus, which a CI display may not grant; the
+        # bindings are checked through their registered callbacks instead.
+        self.assertTrue(app.root.bind("<Control-Key-3>"))
+        self.assertTrue(app.root.bind("<Control-g>"))
+        self.assertTrue(app.root.bind("<Escape>"))
+        app.show_tab("hash")
+        self.assertEqual(app.current_tab, "hash")
+        app.shortcut_generate()
+        self.assertEqual(len(app.tabs["analyze"].var.get()), 16)
+        app.tabs["analyze"].clear()
+        self.assertEqual(app.tabs["analyze"].var.get(), "")
+
+    def test_footer_and_icon(self):
+        from src import __version__
+        from src.gui.app import ICON
+        self.assertTrue(ICON.exists())
+        self.assertIn(__version__, self.app.footer.cget("text"))
+        self.assertIn("github.com/putridpunk", self.app.footer.cget("text"))
+
     def test_language_is_remembered(self):
         from src import settings
         self.app.on_language("Deutsch")

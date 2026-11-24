@@ -22,6 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 RELEASE = ROOT / "release"
 DATA = f"data{os.pathsep}data"
+ASSETS = f"assets{os.pathsep}assets"  # window icon is loaded from here at run time
+ICONS = {"win32": "assets/ciphercheck.ico", "darwin": "assets/ciphercheck.icns"}
 # Standard-library parts CipherCheck never uses; leaving them out keeps the binaries smaller.
 EXCLUDES = ["unittest", "pydoc", "doctest", "sqlite3", "ssl", "xmlrpc", "pdb", "lib2to3"]
 CLI_EXCLUDES = ["tkinter", "_tkinter"]  # the terminal tool has no GUI
@@ -32,11 +34,17 @@ def run(*cmd: str) -> None:
     subprocess.run(cmd, check=True, cwd=ROOT)
 
 
+def cli_icon_skip(cli: bool) -> bool:
+    """The terminal tool keeps a plain icon on macOS (no .app bundle to brand)."""
+    return cli and sys.platform == "darwin"
+
+
 def pyinstaller(name: str, script: str, *flags: str, cli: bool = False) -> None:
     excludes = EXCLUDES + (CLI_EXCLUDES if cli else [])
     strip = ["--strip"] if sys.platform.startswith("linux") else []
+    icon = ["--icon", ICONS[sys.platform]] if sys.platform in ICONS and not cli_icon_skip(cli) else []
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--name", name,
-        "--add-data", DATA, *strip, *[f"--exclude-module={m}" for m in excludes], *flags, script)
+        "--add-data", DATA, "--add-data", ASSETS, *icon, *strip, *[f"--exclude-module={m}" for m in excludes], *flags, script)
 
 
 def main() -> None:

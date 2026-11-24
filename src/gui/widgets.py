@@ -1,4 +1,4 @@
-"""Shared widget factory: themed widgets, language and per-script fonts."""
+"""Shared widget factory: themed widgets, language, per-script fonts and font scale."""
 
 from __future__ import annotations
 
@@ -8,18 +8,21 @@ from ..i18n import is_rtl, t
 from .theme import BG, DARKER, DIM, GREEN, MONO, PANEL, RED, SCRIPT_FONTS, TIP
 
 TAGS = ("head", "bad", "good", "tip", "idle")
+SCALES = (0.9, 1.0, 1.15, 1.3)  # font-size steps (the A- / A+ buttons)
 
 
 class UI:
-    """Holds the current language and creates widgets whose fonts follow it."""
+    """Holds the current language and font scale and creates widgets that follow them."""
 
-    def __init__(self, root: tk.Tk, lang: str):
+    def __init__(self, root: tk.Tk, lang: str, scale: float = 1.0):
         self.root = root
         self.lang = lang
+        self.scale = scale if scale in SCALES else 1.0
         self._fonted: list[tuple[tk.Widget, int, bool]] = []
+        self._mono: list[tuple[tk.Widget, int]] = []
         self._texts: list[tk.Text] = []
 
-    # ----- language -----
+    # ----- language and size -----
     def tr(self, key: str, **kw) -> str:
         return t(self.lang, key, **kw)
 
@@ -31,12 +34,25 @@ class UI:
     def family(self) -> str:
         return SCRIPT_FONTS.get(self.lang, MONO)
 
+    def size(self, base: int) -> int:
+        return max(7, round(base * self.scale))
+
+    def step_scale(self, direction: int) -> bool:
+        """Move one step up (+1) or down (-1). Returns False at the limits."""
+        i = SCALES.index(self.scale) + direction
+        if not 0 <= i < len(SCALES):
+            return False
+        self.scale = SCALES[i]
+        return True
+
     def apply_fonts(self) -> None:
         fam = self.family
         for w, size, bold in self._fonted:
-            w.config(font=(fam, size, "bold" if bold else "normal"))
+            w.config(font=(fam, self.size(size), "bold" if bold else "normal"))
+        for w, size in self._mono:
+            w.config(font=(MONO, self.size(size)))
         for tw in self._texts:
-            tw.tag_config("head", font=(fam, 10, "bold"))
+            tw.tag_config("head", font=(fam, self.size(10), "bold"))
             for tag in TAGS:
                 tw.tag_config(tag, justify="right" if self.rtl else "left")
 
@@ -63,10 +79,13 @@ class UI:
         return b
 
     def entry(self, parent, var: tk.StringVar, size: int, **kw) -> tk.Entry:
-        return tk.Entry(parent, textvariable=var, font=(MONO, size), bg=BG, fg=GREEN,
-                        insertbackground=GREEN, relief="flat", highlightthickness=1,
-                        highlightbackground=DARKER, highlightcolor=GREEN,
-                        selectbackground=GREEN, selectforeground=BG, **kw)
+        e = tk.Entry(parent, textvariable=var, bg=BG, fg=GREEN,
+                     insertbackground=GREEN, relief="flat", highlightthickness=1,
+                     highlightbackground=DARKER, highlightcolor=GREEN,
+                     selectbackground=GREEN, selectforeground=BG, **kw)
+        self._mono.append((e, size))
+        e.config(font=(MONO, self.size(size)))
+        return e
 
     def text_view(self, parent, pady=(8, 16)) -> tk.Text:
         frame = tk.Frame(parent, bg=PANEL)

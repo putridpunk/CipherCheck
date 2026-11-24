@@ -23,6 +23,7 @@ LicenseFile=..\LICENSE
 OutputDir=..\release
 OutputBaseFilename=ciphercheck-setup
 UninstallDisplayIcon={app}\ciphercheck.exe
+SetupIconFile=..\assets\ciphercheck.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

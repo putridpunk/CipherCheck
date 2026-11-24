@@ -14,7 +14,7 @@ Everything runs locally: no network access, no telemetry, and exported reports n
 
 CipherCheck is **source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE)**, not open source. You may use, study and modify it for personal, educational, research and other noncommercial purposes. **Selling it, offering it as a paid product or service, or otherwise earning income from it requires the author's prior written authorization** - contact the author through [github.com/putridpunk](https://github.com/putridpunk). The bundled datasets keep their own licences (see [`data/README.md`](data/README.md)). This is not legal advice.
 
-Contributions are welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Contributions are welcome: see [`CONTRIBUTING.md`](CONTRIBUTING.md). Found a security problem? Please read [`SECURITY.md`](SECURITY.md) first. What changed in each version: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Desktop app
 
@@ -33,6 +33,8 @@ The app has a Matrix/hacker theme and speaks plain language, in 9 languages (Eng
 - **Analyze**: type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. *Generate strong password* turns what you typed into a strong password that still resembles it (or creates a brand-new one if the field is empty). *Generate passphrase* makes five random words from the 7,776-word EFF list (about 65 bits, easy to remember). Copying wipes the clipboard after 30 s, and *Save report* exports TXT / JSON / HTML.
 - **Audit**: pick a file of **synthetic** test passwords (one per line) and get a statistics dashboard: strength distribution, most common problems, passwords reused and near-copies of each other (`Summer2024!` / `summer2025`). Passwords are never shown or saved; the summary can be exported.
 - **Hash**: paste a hash to see which formats it could be and whether they suit password storage. Only the format is checked; nothing is cracked.
+
+Handy extras: `Ctrl+1/2/3` switch tabs, `Ctrl+G` generates a password, `Esc` clears the current input, and the `A−` / `A+` buttons (top-left) change the text size; both the language and the text size are remembered. The footer shows the version and links to this repository.
 
 ```powershell
 .\build.ps1          # Windows: runs the tests, then builds ciphercheck.exe and ciphercheck-cli.exe

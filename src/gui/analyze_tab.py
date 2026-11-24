@@ -63,6 +63,9 @@ class AnalyzeTab:
     def focus(self) -> None:
         self.entry.focus_set()
 
+    def clear(self) -> None:
+        self.var.set("")
+
     def apply_language(self) -> None:
         ui = self.ui
         self.prompt.config(text=ui.tr("prompt"), anchor="e" if ui.rtl else "w")

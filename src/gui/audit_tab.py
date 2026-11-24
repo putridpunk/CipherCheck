@@ -45,6 +45,12 @@ class AuditTab:
     def focus(self) -> None:
         self.ui.root.focus_set()
 
+    def clear(self) -> None:
+        """Escape on this tab: forget the loaded statistics."""
+        self._agg = None
+        self.status.config(text="")
+        self.render()
+
     def apply_language(self) -> None:
         ui = self.ui
         self.intro.config(text=ui.tr("au_intro"), justify="right" if ui.rtl else "left")
@@ -132,11 +138,11 @@ class AuditTab:
             n = agg["assessment_counts"][lbl]
             y = 4 + i * 25
             c.create_text(0, y + 9, anchor="w", text=ui.tr(f"v{level}"), fill=color,
-                          font=(fam, 10, "bold"))
+                          font=(fam, ui.size(10), "bold"))
             width = int(300 * n / top)
             c.create_rectangle(170, y, 170 + max(width, 2 if n else 0), y + 18,
                                fill=color if n else DARKER, outline="")
-            c.create_text(170 + width + 8, y + 9, anchor="w", fill=GREEN, font=(fam, 10),
+            c.create_text(170 + width + 8, y + 9, anchor="w", fill=GREEN, font=(fam, ui.size(10)),
                           text=f"{n:,}  ({100 * n / total:.1f}%)")
         lines: list[tuple[str, str]] = []
         reuse = agg.get("reuse", {})

@@ -5,6 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-24
+
+### Fixed
+- **Linux:** the v0.6.0 app binary did not start on Ubuntu 24.04 (`GLIBC_2.42 not found`) because it was built on the newest Ubuntu runner. Linux binaries are now built on Ubuntu 22.04 (glibc 2.35) and run on 22.04 and newer.
+
+### Added
+- The release workflow smoke-tests the executables before publishing: the app is started under a virtual display on Linux, and the terminal tool is run on every OS.
+
 ## [0.6.0] - 2026-11-24
 
 ### Added
@@ -75,7 +83,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/putridpunk/CipherCheck/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/putridpunk/CipherCheck/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/putridpunk/CipherCheck/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/putridpunk/CipherCheck/compare/v0.3.0...v0.4.0

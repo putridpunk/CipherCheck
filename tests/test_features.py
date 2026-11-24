@@ -275,5 +275,26 @@ class AuditFileTests(unittest.TestCase):
             self.assertEqual(main(["-f", str(path), "-j", "1", "-q"]), 0)
 
 
+class InstallerMutexTests(unittest.TestCase):
+    """The uninstaller can only ask the user to close the app if the app holds the agreed mutex."""
+
+    def test_installer_and_app_agree_on_the_mutex_name(self):
+        from pathlib import Path
+        from src.gui.app import INSTANCE_MUTEX
+        iss = (Path(__file__).resolve().parent.parent / "installer" / "ciphercheck.iss").read_text(encoding="utf-8")
+        self.assertIn(f"AppMutex={INSTANCE_MUTEX}", iss)
+
+    def test_app_holds_the_mutex_on_windows(self):
+        import sys
+        if sys.platform != "win32":
+            self.skipTest("Windows only")
+        import ctypes
+        from src.gui import app
+        app.hold_instance_mutex()
+        handle = ctypes.windll.kernel32.OpenMutexW(0x00100000, False, app.INSTANCE_MUTEX)  # SYNCHRONIZE
+        self.assertTrue(handle)
+        ctypes.windll.kernel32.CloseHandle(handle)
+
+
 if __name__ == "__main__":
     unittest.main()

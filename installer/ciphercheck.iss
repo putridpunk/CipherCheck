@@ -7,6 +7,10 @@
 #endif
 
 [Setup]
+; The app holds this named mutex while it is open (see src/gui/app.py). Setup and the uninstaller
+; use it to ask the user to close the app instead of failing to replace or delete its files
+; ("Some elements could not be removed").
+AppMutex=CipherCheckAppMutex
 AppId={{6F0B7C58-2C1E-4A57-9D3B-5E1A8F2C94D7}
 AppName=CipherCheck
 AppVersion={#AppVersion}

@@ -64,7 +64,7 @@ class AnalyzeTab:
 
     def apply_language(self) -> None:
         ui = self.ui
-        self.prompt.config(text=ui.tr("prompt"), anchor="e" if ui.rtl else "w")
+        self.prompt.config(text=ui.tr("prompt"), anchor="center")
         self.privacy.config(text=ui.tr("privacy"))
         self.gen_btn.config(text=ui.tr("gen"))
         self.phrase_btn.config(text=ui.tr("phrase_btn"))

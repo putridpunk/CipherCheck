@@ -5,6 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-24
+
+### Fixed
+- **Windows uninstaller: "Some elements could not be removed".** Uninstalling while CipherCheck was still open could not delete `ciphercheck.exe` (it was in use). The app now tells the installer that it is running, so the uninstaller (and a later upgrade) asks you to close it first and then removes everything. Versions already installed keep their old uninstaller: close the app before uninstalling them, or install the new version over them first.
+
+### Changed
+- Text in the window is now centred (the prompts above the input fields, the Audit tab's intro and hint), while the lists of explanations and the input fields stay left-aligned (right-aligned lists in Arabic).
+
 ## [0.6.2] - 2026-11-24
 
 ### Fixed
@@ -91,7 +99,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/putridpunk/CipherCheck/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/putridpunk/CipherCheck/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/putridpunk/CipherCheck/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/putridpunk/CipherCheck/compare/v0.5.0...v0.6.0

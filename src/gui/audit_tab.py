@@ -29,9 +29,9 @@ class AuditTab:
         self._thread: threading.Thread | None = None
         self._cancel = threading.Event()
 
-        self.intro = ui.label(page, size=10, color=DIM, wraplength=600, justify="left")
+        self.intro = ui.label(page, size=10, color=DIM, wraplength=600, justify="center")
         self.intro.pack(padx=30, pady=(12, 4), fill="x")
-        self.drop_hint = ui.label(page, size=9, color=DIM, wraplength=600, justify="left")
+        self.drop_hint = ui.label(page, size=9, color=DIM, wraplength=600, justify="center")
         self.drop_hint.pack(padx=30, pady=(0, 6), fill="x")
         buttons = ui.button_row(page)
         buttons.frame.pack()
@@ -66,7 +66,7 @@ class AuditTab:
 
     def apply_language(self) -> None:
         ui = self.ui
-        self.intro.config(text=ui.tr("au_intro"), justify="right" if ui.rtl else "left")
+        self.intro.config(text=ui.tr("au_intro"))
         self.drop_hint.config(text=ui.tr("au_drop") if self.show_drop_hint else "")
         self.choose_btn.config(text=ui.tr("au_choose"))
         self.cancel_btn.config(text=ui.tr("au_cancel"))

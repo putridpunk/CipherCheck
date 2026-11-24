@@ -27,7 +27,7 @@ class HashTab:
         self.var.set("")
 
     def apply_language(self) -> None:
-        self.prompt.config(text=self.ui.tr("hash_prompt"), anchor="e" if self.ui.rtl else "w")
+        self.prompt.config(text=self.ui.tr("hash_prompt"), anchor="center")
         self.refresh()
 
     def refresh(self) -> None:

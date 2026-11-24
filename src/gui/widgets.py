@@ -86,7 +86,7 @@ class UI:
         for tw in self._texts:
             tw.tag_config("head", font=(fam, self.size(10), "bold"))
             for tag in TAGS:
-                tw.tag_config(tag, justify="right" if self.rtl else "left")
+                tw.tag_config(tag, justify="right" if self.rtl else "left")  # lists are left-aligned
 
     def _reg(self, widget: Any, size: int, bold: bool = False) -> None:
         self._fonted.append((widget, size, bold))
@@ -136,7 +136,7 @@ class UI:
         e = tk.Entry(parent, textvariable=var, bg=BG, fg=GREEN,
                      insertbackground=GREEN, relief="flat", highlightthickness=1,
                      highlightbackground=DARKER, highlightcolor=GREEN,
-                     selectbackground=GREEN, selectforeground=BG, width=8, **kw)
+                     selectbackground=GREEN, selectforeground=BG, width=8, justify="left", **kw)
         self._mono.append((e, size))
         e.config(font=(MONO, self.size(size)))
         return e
@@ -177,7 +177,7 @@ class UI:
         body = tk.Frame(top, bg=PANEL, padx=28, pady=22)
         body.pack(padx=1, pady=1)
         fam = self.family
-        msg = tk.Label(body, text=self.tr(message_key), bg=PANEL, fg=GREEN, justify="right" if self.rtl else "center",
+        msg = tk.Label(body, text=self.tr(message_key), bg=PANEL, fg=GREEN, justify="center",
                        wraplength=int(380 * max(1.0, self.scale)), font=(fam, self.size(12), "bold"))
         msg.pack(pady=(0, 18))
         result = {"yes": False}

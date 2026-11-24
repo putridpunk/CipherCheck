@@ -20,6 +20,10 @@ from .widgets import UI
 
 TAB_CLASSES = {"analyze": AnalyzeTab, "audit": AuditTab, "hash": HashTab}
 REPO_URL = "https://github.com/putridpunk/CipherCheck"
+# Named Windows mutex held while the app is open; the installer (AppMutex in installer/ciphercheck.iss)
+# uses it to notice a running app instead of failing to replace or delete its files.
+INSTANCE_MUTEX = "CipherCheckAppMutex"
+_mutex_handle: Any = None
 PANEL_WIDTH = 660
 PANEL_RELHEIGHT = 0.95
 ICON = ASSETS_DIR / "ciphercheck.png"
@@ -229,6 +233,18 @@ class App:
         self.root.after(550, self._blink_title)
 
 
+def hold_instance_mutex() -> None:
+    """Windows only: tell the installer/uninstaller that the app is running."""
+    global _mutex_handle
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        _mutex_handle = ctypes.windll.kernel32.CreateMutexW(None, False, INSTANCE_MUTEX)
+    except Exception:
+        pass  # purely an aid for the installer; never stop the app over it
+
+
 def run() -> None:
     if sys.platform == "win32":  # crisp text on high-DPI Windows screens
         try:
@@ -236,6 +252,7 @@ def run() -> None:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
+    hold_instance_mutex()
     try:  # optional: adds drag-and-drop of files onto the window
         from tkinterdnd2 import TkinterDnD
         root: tk.Tk = TkinterDnD.Tk()

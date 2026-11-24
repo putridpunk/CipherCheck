@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+from typing import Any
 
 from ..i18n import is_rtl, t
 from .theme import BG, DARKER, DIM, GREEN, MONO, PANEL, RED, SCRIPT_FONTS, TIP
@@ -18,8 +19,8 @@ class UI:
         self.root = root
         self.lang = lang
         self.scale = scale if scale in SCALES else 1.0
-        self._fonted: list[tuple[tk.Widget, int, bool]] = []
-        self._mono: list[tuple[tk.Widget, int]] = []
+        self._fonted: list[tuple[Any, int, bool]] = []
+        self._mono: list[tuple[Any, int]] = []
         self._texts: list[tk.Text] = []
 
     # ----- language and size -----
@@ -56,7 +57,7 @@ class UI:
             for tag in TAGS:
                 tw.tag_config(tag, justify="right" if self.rtl else "left")
 
-    def _reg(self, widget: tk.Widget, size: int, bold: bool = False) -> None:
+    def _reg(self, widget: Any, size: int, bold: bool = False) -> None:
         self._fonted.append((widget, size, bold))
 
     # ----- factories -----

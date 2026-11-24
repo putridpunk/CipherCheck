@@ -9,7 +9,7 @@ from tkinter import filedialog
 from .. import report
 from ..analyzer import analyze
 from ..friendly import explain, generate_passphrase, generate_password, strengthen
-from .theme import DARKER, DIM, GREEN, MONO, PANEL
+from .theme import DARKER, DIM, PANEL
 from .widgets import UI
 
 CLIPBOARD_WIPE_MS = 30_000

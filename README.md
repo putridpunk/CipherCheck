@@ -1,5 +1,11 @@
 # CipherCheck
 
+[![CI](https://github.com/putridpunk/CipherCheck/actions/workflows/ci.yml/badge.svg)](https://github.com/putridpunk/CipherCheck/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/putridpunk/CipherCheck)](https://github.com/putridpunk/CipherCheck/releases/latest)
+[![Licence: PolyForm Noncommercial](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![Offline](https://img.shields.io/badge/network-none-brightgreen)
+
 A modular password security auditing tool developed in Python. Evaluates password strength through entropy estimation, pattern recognition, dictionary-based detection and security analysis. Features local processing, automated testing and exportable security reports.
 
 Everything runs locally: no network access, no telemetry, and exported reports never contain the password.
@@ -96,6 +102,8 @@ Assessment thresholds (estimated bits): `<28` very weak · `<40` weak · `<60` m
 ```powershell
 python -m unittest discover -s tests -t .
 ```
+
+CI also runs `ruff` (rules in `ruff.toml`), `mypy` (`mypy.ini`) and a coverage report that must stay at or above 80% (currently ~88%). To check locally: `pip install ruff mypy coverage`, then `ruff check .`, `mypy` and `coverage run -m unittest discover -s tests -t . && coverage report`. Line endings are normalised to LF by `.gitattributes`.
 
 ## Continuous integration
 

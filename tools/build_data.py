@@ -45,14 +45,14 @@ def main(source: Path) -> None:
                 curated += ln.split()
     seen = {w.lower() for w in curated}
     derived: list[str] = []
-    for ln in raw:
+    for entry in raw:
         if len(derived) >= EXTRA_WORDS:
             break
-        if WORD.match(ln):
-            w = ln.decode("ascii")
-            if w not in seen:
-                seen.add(w)
-                derived.append(w)
+        if WORD.match(entry):
+            word = entry.decode("ascii")
+            if word not in seen:
+                seen.add(word)
+                derived.append(word)
     lines = [" ".join(curated[i:i + 20]) for i in range(0, len(curated), 20)]
     lines += [" ".join(derived[i:i + 20]) for i in range(0, len(derived), 20)]
     (DATA / "common_words.txt").write_text(

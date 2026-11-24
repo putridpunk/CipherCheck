@@ -14,3 +14,7 @@ dist/
 *.spec
 *.exe
 release/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

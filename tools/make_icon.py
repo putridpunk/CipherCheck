@@ -89,7 +89,7 @@ def render(size: int) -> bytes:
                     u = (i + (si + 0.5) / ss) * px - 1
                     v = (j + (sj + 0.5) / ss) * px - 1
                     sr, sg, sb, sa = sample(u, v, px / ss)
-                    r += sr; g += sg; b += sb; a += sa
+                    r, g, b, a = r + sr, g + sg, b + sb, a + sa
             n = ss * ss
             a /= n
             if a > 0:

@@ -43,8 +43,9 @@ def pyinstaller(name: str, script: str, *flags: str, cli: bool = False) -> None:
     excludes = EXCLUDES + (CLI_EXCLUDES if cli else [])
     strip = ["--strip"] if sys.platform.startswith("linux") else []
     icon = ["--icon", ICONS[sys.platform]] if sys.platform in ICONS and not cli_icon_skip(cli) else []
+    exclude_flags = [f"--exclude-module={m}" for m in excludes]
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--name", name,
-        "--add-data", DATA, "--add-data", ASSETS, *icon, *strip, *[f"--exclude-module={m}" for m in excludes], *flags, script)
+        "--add-data", DATA, "--add-data", ASSETS, *icon, *strip, *exclude_flags, *flags, script)
 
 
 def main() -> None:

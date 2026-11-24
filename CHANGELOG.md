@@ -5,6 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- CI now runs `ruff`, `mypy` and a coverage report (minimum 80%).
+- README badges.
+
+### Changed
+- `.gitattributes` normalises line endings to LF.
+- Small code clean-ups found by the new checks (unused imports, type hints).
+
 ## [0.5.0] - 2026-11-24
 
 ### Added

@@ -81,7 +81,6 @@ class VulnerabilityTests(unittest.TestCase):
             self.assertNotIn(pw, out)
 
 
-
 class BreachTests(unittest.TestCase):
     def test_known_leaked_password_detected(self):
         from src.breach import default_breach_db

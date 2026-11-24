@@ -11,6 +11,7 @@ import json
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol, Sequence
 
 from . import __version__
 from .analyzer import LABEL_ORDER, PATTERN_ADVICE, PATTERN_TEXT, Analysis
@@ -129,7 +130,20 @@ def write_report(a: Analysis, path: str | Path, fmt: str | None = None,
 
 # ---------- batch / aggregate ----------
 
-def aggregate(analyses: list[Analysis], reuse: dict | None = None) -> dict:
+class Summarisable(Protocol):
+    """What aggregate() needs from an analysis (the Audit tab passes light-weight stand-ins)."""
+
+    @property
+    def label(self) -> str: ...
+    @property
+    def pattern_kinds(self) -> list[str]: ...
+    @property
+    def estimated_bits(self) -> float: ...
+    @property
+    def length(self) -> int: ...
+
+
+def aggregate(analyses: Sequence[Summarisable], reuse: dict | None = None) -> dict:
     n = len(analyses)
     labels = Counter(a.label for a in analyses)
     kinds = Counter(k for a in analyses for k in a.pattern_kinds)

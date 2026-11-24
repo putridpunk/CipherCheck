@@ -94,7 +94,8 @@ def explain(candidates: list[Candidate], lang: str = "en") -> list[tuple[str, st
         lines.append(("idle", t(lang, "hash_ambig")))
     for c in candidates:
         tag = {"weak": "bad", "ok": "tip", "strong": "good"}[c.status]
-        title = f" [{ {'weak': '-', 'ok': '~', 'strong': '+'}[c.status] }] {c.name}"
+        marker = {"weak": "-", "ok": "~", "strong": "+"}[c.status]
+        title = f" [{marker}] {c.name}"
         if c.detail:
             title += f"  ({c.detail})"
         lines.append((tag, title))

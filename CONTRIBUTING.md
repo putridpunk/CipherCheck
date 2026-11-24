@@ -26,6 +26,7 @@ python build.py                                # build executables (needs: pip i
 - **No real data.** Do not commit real passwords, real hashes or personal data (also in screenshots and test fixtures). Use made-up examples.
 - **Translations.** Every user-facing string lives in `src/locales/<code>.py`. When you add or change a key, add it to **all nine** languages; `tests/test_friendly.py` fails if keys or `{placeholders}` differ from English. Native-speaker corrections are especially valuable.
 - **Tests.** New behaviour needs a test. GUI tests skip themselves when no display is available.
+- **Lint and types.** CI runs `ruff check .` and `mypy`, and the test coverage must stay at or above 80%.
 - **Keep it small.** Prefer clear, focused pull requests.
 
 ## Project layout

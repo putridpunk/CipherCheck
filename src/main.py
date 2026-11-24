@@ -67,10 +67,12 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):  # non-Latin scripts on Windows consoles
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except (AttributeError, ValueError):
-            pass
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            try:
+                reconfigure(encoding="utf-8")
+            except ValueError:
+                pass
     args = build_parser().parse_args(argv)
 
     if args.passphrase is not None:

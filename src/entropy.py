@@ -70,12 +70,12 @@ def estimate_entropy(password: str, matches: list[Match]) -> tuple[float, list[M
     used: list[Match] = []
     i = n
     while i > 0:
-        m = back[i]
-        if m is None:
+        step = back[i]
+        if step is None:
             i -= 1
         else:
-            used.append(m)
-            i = m.start
+            used.append(step)
+            i = step.start
     used.reverse()
     return best[n], used
 

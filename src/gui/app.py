@@ -96,7 +96,7 @@ class App:
         box = tk.Frame(self.panel, bg=PANEL)
         box.place(x=12, y=10)
         for text, step in (("A−", -1), ("A+", 1)):
-            b = tk.Button(box, text=text, command=lambda s=step: self.change_font(s), bg=BG, fg=GREEN,
+            b = tk.Button(box, text=text, command=self._font_command(step), bg=BG, fg=GREEN,
                           relief="flat", bd=0, padx=8, pady=3, cursor="hand2", font=font,
                           activebackground=GREEN, activeforeground=BG,
                           highlightbackground=GREEN, highlightthickness=1)
@@ -104,7 +104,7 @@ class App:
 
         self.lang_var = tk.StringVar(value=LANGUAGES[self.ui.lang])
         self.lang_menu = tk.OptionMenu(self.panel, self.lang_var, *LANGUAGES.values(),
-                                       command=self.on_language)
+                                       command=self.on_language)  # type: ignore[arg-type]
         menu_font = (MENU_FONT, 10)
         self.lang_menu.config(bg=BG, fg=GREEN, activebackground=GREEN, activeforeground=BG,
                               relief="flat", bd=0, highlightthickness=1,
@@ -116,7 +116,7 @@ class App:
     def _bind_shortcuts(self) -> None:
         r = self.root
         for i, name in enumerate(TAB_CLASSES, start=1):
-            r.bind(f"<Control-Key-{i}>", lambda e, n=name: self.show_tab(n))
+            r.bind(f"<Control-Key-{i}>", self._tab_command(name))
         r.bind("<Control-g>", lambda e: self.shortcut_generate())
         r.bind("<Control-G>", lambda e: self.shortcut_generate())
         r.bind("<Escape>", lambda e: self.tabs[self.current_tab].clear())
@@ -131,6 +131,12 @@ class App:
             on = n == name
             b.config(bg=GREEN if on else BG, fg=BG if on else GREEN)
         self.tabs[name].focus()
+
+    def _font_command(self, step: int):
+        return lambda: self.change_font(step)
+
+    def _tab_command(self, name: str):
+        return lambda event: self.show_tab(name)
 
     def shortcut_generate(self) -> None:
         self.show_tab("analyze")

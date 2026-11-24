@@ -1,0 +1,19 @@
+name: Feature request or translation fix
+description: Suggest an improvement, or correct a translation
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to see?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help?
+  - type: input
+    id: translation
+    attributes:
+      label: Translation fixes only - language and the text to change
+      placeholder: "Japanese: key `p_year` should say ..."

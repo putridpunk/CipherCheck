@@ -1,0 +1,56 @@
+name: Bug report
+description: Something does not work, a build will not start, or a result looks wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping! **Never paste a real password** into an issue. Use a made-up one that shows the same problem.
+  - type: dropdown
+    id: what
+    attributes:
+      label: What are you using?
+      options:
+        - Desktop app (ciphercheck / ciphercheck.exe / .app)
+        - Terminal tool (ciphercheck-cli)
+        - Python source (python -m src.main / python ciphercheck.py)
+        - Installer (ciphercheck-setup.exe)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown by `ciphercheck-cli --version`, or the release tag you downloaded.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: OS version
+      placeholder: "Windows 11 23H2 / macOS 14.5 / Ubuntu 24.04"
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+      description: For a program that will not start, include any error message or say that nothing appeared.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open the Audit tab\n2. ..."
+  - type: input
+    id: language
+    attributes:
+      label: Language in use (if it is about a translation)
+      placeholder: "Arabic"

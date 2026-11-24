@@ -14,6 +14,7 @@ from pathlib import Path
 
 from . import __version__
 from .analyzer import LABEL_ORDER, PATTERN_ADVICE, PATTERN_TEXT, Analysis
+from .i18n import t
 from .vulnerabilities import assess, risk_level
 
 BAR = "=" * 36
@@ -115,18 +116,20 @@ online throttled <b>{e(a.crack_time['online_throttled'])}</b></p>
 RENDERERS = {"txt": to_text, "json": to_json, "html": to_html}
 
 
-def write_report(a: Analysis, path: str | Path, fmt: str | None = None) -> Path:
+def write_report(a: Analysis, path: str | Path, fmt: str | None = None,
+                 lang: str | None = None) -> Path:
     path = Path(path)
     fmt = (fmt or path.suffix.lstrip(".") or "txt").lower()
     if fmt not in RENDERERS:
         raise ValueError(f"Unsupported report format: {fmt!r} (use txt, json or html)")
-    path.write_text(RENDERERS[fmt](a), encoding="utf-8")
+    text = to_friendly_text(a, lang) if lang and fmt == "txt" else RENDERERS[fmt](a)
+    path.write_text(text, encoding="utf-8")
     return path
 
 
 # ---------- batch / aggregate ----------
 
-def aggregate(analyses: list[Analysis]) -> dict:
+def aggregate(analyses: list[Analysis], reuse: dict | None = None) -> dict:
     n = len(analyses)
     labels = Counter(a.label for a in analyses)
     kinds = Counter(k for a in analyses for k in a.pattern_kinds)
@@ -139,6 +142,7 @@ def aggregate(analyses: list[Analysis]) -> dict:
         "average_estimated_bits": round(sum(a.estimated_bits for a in analyses) / n, 1) if n else 0,
         "average_length": round(sum(a.length for a in analyses) / n, 1) if n else 0,
         "pattern_counts": dict(kinds.most_common()),
+        "reuse": reuse or {"exact_duplicates": 0, "similar_to_another": 0, "similar_groups": 0},
         "most_common_problems": [
             {"kind": k, "count": c, "percent": round(100 * c / n, 1),
              "description": PATTERN_TEXT.get(k, k), "recommendation": PATTERN_ADVICE.get(k, "")}
@@ -155,6 +159,12 @@ def aggregate_text(agg: dict) -> str:
     for lbl, c in agg["assessment_counts"].items():
         pct = 100 * c / agg["total"] if agg["total"] else 0
         lines.append(f"  {lbl:<12} {c:>6}  ({pct:.1f}%)")
+    r, n = agg.get("reuse", {}), agg["total"] or 1
+    lines += ["", "Reuse inside the dataset:",
+              f"  Passwords used more than once: {r.get('exact_duplicates', 0)} "
+              f"({100 * r.get('exact_duplicates', 0) / n:.1f}%)",
+              f"  Near-copies of another password (same base word): {r.get('similar_to_another', 0)} "
+              f"({100 * r.get('similar_to_another', 0) / n:.1f}%)"]
     lines += ["", "Most common problems (share of passwords):"]
     for p in agg.get("most_common_problems", []):
         lines += [f"  {p['percent']:>5}%  {p['description']}", f"          Fix: {p['recommendation']}"]
@@ -171,6 +181,7 @@ def aggregate_json(agg: dict) -> str:
 def aggregate_html(agg: dict) -> str:
     e = html.escape
     total = agg["total"] or 1
+    reuse = agg.get("reuse", {})
     colors = {"VERY WEAK": "#c33", "WEAK": "#e80", "MODERATE": "#cb0", "STRONG": "#2a7", "VERY STRONG": "#0a5"}
     bars = "\n".join(
         f'<tr><td>{e(lbl)}</td><td style="width:60%"><div class="bar" style="width:{100 * c / total:.1f}%;'
@@ -191,6 +202,9 @@ table{{border-collapse:collapse;width:100%}} td{{border-top:1px solid #ddd;paddi
 <p>{agg['total']:,} passwords analysed &middot; average length {agg['average_length']} &middot;
 average estimated entropy {agg['average_estimated_bits']} bits</p>
 <h2>Strength distribution</h2><table>{bars}</table>
+<h2>Reuse inside the dataset</h2>
+<p>Passwords used more than once: <b>{reuse.get('exact_duplicates', 0):,}</b> ({100 * reuse.get('exact_duplicates', 0) / total:.1f}%)<br>
+Near-copies of another password (same base word): <b>{reuse.get('similar_to_another', 0):,}</b> ({100 * reuse.get('similar_to_another', 0) / total:.1f}%)</p>
 <h2>Most common problems</h2><table>{probs}</table>
 <p><small>Generated {e(agg['generated_at'])} by CipherCheck {e(agg['version'])}.
 No passwords are stored in this summary.</small></p>
@@ -201,10 +215,49 @@ No passwords are stored in this summary.</small></p>
 AGG_RENDERERS = {"txt": aggregate_text, "json": aggregate_json, "html": aggregate_html}
 
 
-def write_aggregate(agg: dict, path: str | Path, fmt: str | None = None) -> Path:
+def write_aggregate(agg: dict, path: str | Path, fmt: str | None = None,
+                    lang: str | None = None) -> Path:
     path = Path(path)
     fmt = (fmt or path.suffix.lstrip(".") or "txt").lower()
     if fmt not in AGG_RENDERERS:
         raise ValueError(f"Unsupported report format: {fmt!r} (use txt, json or html)")
-    path.write_text(AGG_RENDERERS[fmt](agg), encoding="utf-8")
+    text = aggregate_friendly(agg, lang) if lang and fmt == "txt" else AGG_RENDERERS[fmt](agg)
+    path.write_text(text, encoding="utf-8")
     return path
+
+
+# ---------- plain-language, translated output (used by --lang) ----------
+
+def to_friendly_text(a: Analysis, lang: str) -> str:
+    from .friendly import explain  # local import: friendly depends on analyzer only
+    r = explain(a, lang)
+    lines = [BAR, f"{'CIPHERCHECK':^36}".rstrip(), BAR, "",
+             f"{r.verdict}  ({a.score}/100)", r.headline, t(lang, "crack", time=r.crack_time)]
+    for hdr, items, mark in (("hdr_bad", r.bad, "-"), ("hdr_good", r.good, "+"), ("hdr_tips", r.tips, ">")):
+        if items:
+            lines += ["", t(lang, hdr)] + [f" [{mark}] {x}" for x in items]
+    lines += ["", BAR]
+    return "\n".join(lines)
+
+
+def aggregate_friendly(agg: dict, lang: str) -> str:
+    from .friendly import KEY, LEVELS
+    total = agg["total"] or 1
+    lines = [BAR, f"{'CIPHERCHECK':^36}".rstrip(), BAR, "", t(lang, "au_total", n=f"{agg['total']:,}"), ""]
+    for lbl in LABEL_ORDER:
+        level, _ = LEVELS[lbl]
+        n = agg["assessment_counts"][lbl]
+        lines.append(f"  {t(lang, f'v{level}'):<18} {'#' * round(30 * n / total):<30} {n:,} ({100 * n / total:.1f}%)")
+    reuse = agg.get("reuse", {})
+    reuse_lines = [" [-] " + t(lang, key, n=f"{reuse.get(field, 0):,}",
+                               pct=f"{100 * reuse.get(field, 0) / total:.1f}")
+                   for key, field in (("au_dupes", "exact_duplicates"),
+                                      ("au_similar", "similar_to_another"))
+                   if reuse.get(field, 0)]
+    if reuse_lines:
+        lines += [""] + reuse_lines
+    if agg["pattern_counts"]:
+        lines += ["", t(lang, "au_issues")]
+        lines += [f" [-] {100 * n / total:.0f}%  {t(lang, 'p_' + KEY[k])}" for k, n in agg["pattern_counts"].items()]
+    lines += ["", BAR]
+    return "\n".join(lines)

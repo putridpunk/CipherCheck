@@ -62,7 +62,7 @@ class Analysis:
 
     @property
     def pattern_kinds(self) -> list[str]:
-        return sorted({m.kind for m in self.matches})
+        return sorted({m.kind for m in self.matches if m.kind != "separator"})
 
 
 def _label(bits: float) -> str:
@@ -78,6 +78,13 @@ def analyze(password: str, dictionary: Dictionary | None = None,
     breach_db = breach_db or default_breach_db()
     n = len(password)
     all_matches = patterns.find_matches(password) + dictionary.find_matches(password)
+    # A lone - _ . or space between two dictionary words is one of ~4 common separators,
+    # not a free choice among all symbols (matters for passphrases).
+    word_starts = {m.start for m in all_matches if m.kind == "word"}
+    word_ends = {m.end for m in all_matches if m.kind == "word"}
+    for i, ch in enumerate(password):
+        if ch in "-_. " and i in word_ends and i + 1 in word_starts:
+            all_matches.append(Match("separator", i, i + 1, 2.0))
     if (password and breach_db and breach_db.contains(password)
             and not any(m.kind == "common_password" for m in all_matches)):
         all_matches.append(Match("breached", 0, n, BREACH_BITS))

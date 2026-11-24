@@ -8,7 +8,7 @@ from tkinter import filedialog
 
 from .. import report
 from ..analyzer import analyze
-from ..friendly import explain, generate_password, strengthen
+from ..friendly import explain, generate_passphrase, generate_password, strengthen
 from .theme import DARKER, DIM, GREEN, MONO, PANEL
 from .widgets import UI
 
@@ -36,13 +36,17 @@ class AnalyzeTab:
 
         buttons = tk.Frame(page, bg=PANEL)
         buttons.pack(pady=(10, 0))
-        self.gen_btn = ui.button(buttons, self.generate)
-        self.gen_btn.grid(row=0, column=0, columnspan=3, pady=(0, 6))
-        self.copy_btn = ui.button(buttons, self.copy)
-        self.clear_btn = ui.button(buttons, lambda: self.var.set(""))
-        self.save_btn = ui.button(buttons, self.save_report)
-        for col, b in enumerate((self.copy_btn, self.clear_btn, self.save_btn)):
-            b.grid(row=1, column=col, padx=4)
+        gen_row = tk.Frame(buttons, bg=PANEL)
+        gen_row.pack(pady=(0, 6))
+        self.gen_btn = ui.button(gen_row, self.generate)
+        self.phrase_btn = ui.button(gen_row, self.generate_phrase)
+        act_row = tk.Frame(buttons, bg=PANEL)
+        act_row.pack()
+        self.copy_btn = ui.button(act_row, self.copy)
+        self.clear_btn = ui.button(act_row, lambda: self.var.set(""))
+        self.save_btn = ui.button(act_row, self.save_report)
+        for b in (self.gen_btn, self.phrase_btn, self.copy_btn, self.clear_btn, self.save_btn):
+            b.pack(side="left", padx=4)
         self.status = ui.label(page, size=10, wraplength=600)
         self.status.pack(pady=(4, 0))
 
@@ -64,6 +68,7 @@ class AnalyzeTab:
         self.prompt.config(text=ui.tr("prompt"), anchor="e" if ui.rtl else "w")
         self.privacy.config(text=ui.tr("privacy"))
         self.gen_btn.config(text=ui.tr("gen"))
+        self.phrase_btn.config(text=ui.tr("phrase_btn"))
         self.copy_btn.config(text=ui.tr("copy"))
         self.clear_btn.config(text=ui.tr("clear"))
         self.save_btn.config(text=ui.tr("save_report"))
@@ -100,6 +105,12 @@ class AnalyzeTab:
         if self.entry.cget("show") != "":
             self.toggle_show()
         self.say(msg)
+
+    def generate_phrase(self) -> None:
+        self.var.set(generate_passphrase(5))
+        if self.entry.cget("show") != "":
+            self.toggle_show()
+        self.say("st_passphrase")
 
     def copy(self) -> None:
         pw = self.var.get()

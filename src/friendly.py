@@ -11,6 +11,7 @@ import string
 from dataclasses import dataclass, field
 
 from .analyzer import Analysis, analyze
+from .dictionary import passphrase_words
 from .entropy import OFFLINE_GUESSES_PER_SEC
 from .i18n import t, unit
 
@@ -166,3 +167,11 @@ def strengthen(password: str) -> str:
     while len(result) < MIN_LENGTH or analyze(result).estimated_bits < TARGET_BITS:
         result += rnd.choice(pool)
     return result
+
+
+def generate_passphrase(words: int = 5, separator: str = "-") -> str:
+    """Random words from the EFF list (about 12.9 bits each; five words ~ 65 bits)."""
+    pool = passphrase_words()
+    if not pool:
+        raise RuntimeError("passphrase word list is missing")
+    return separator.join(secrets.choice(pool) for _ in range(words))

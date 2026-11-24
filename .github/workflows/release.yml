@@ -41,6 +41,16 @@ jobs:
             python build.py
           fi
 
+      - name: Build the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $v = python -c "from src import __version__; print(__version__)"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" installer\ciphercheck.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Get-ChildItem release
+
       - uses: actions/upload-artifact@v4
         with:
           name: ciphercheck-${{ runner.os }}

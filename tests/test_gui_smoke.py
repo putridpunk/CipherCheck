@@ -30,12 +30,16 @@ class GuiSmokeTests(unittest.TestCase):
         if self.root is None:
             self.skipTest("no display available")
         self.root.withdraw()
+        self._cfg = tempfile.TemporaryDirectory()  # never touch the user's real settings
+        os.environ["CIPHERCHECK_CONFIG_DIR"] = self._cfg.name
         from src.gui import App
         self.app = App(self.root)
 
     def tearDown(self):
         if self.root is not None:
             self.root.destroy()
+            os.environ.pop("CIPHERCHECK_CONFIG_DIR", None)
+            self._cfg.cleanup()
 
     def test_every_language_and_tab(self):
         app = self.app
@@ -47,6 +51,16 @@ class GuiSmokeTests(unittest.TestCase):
             for tab in app.tabs:
                 app.show_tab(tab)
                 self.root.update()
+
+    def test_language_is_remembered(self):
+        from src import settings
+        self.app.on_language("Deutsch")
+        self.assertEqual(settings.load()["language"], "de")
+
+    def test_passphrase_button(self):
+        tab = self.app.tabs["analyze"]
+        tab.generate_phrase()
+        self.assertEqual(len(tab.var.get().split("-")), 5)
 
     def test_generate_copy_and_clear(self):
         tab = self.app.tabs["analyze"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tkinter as tk
 
+from .. import settings
 from ..i18n import LANGUAGES, detect_language
 from .analyze_tab import AnalyzeTab
 from .audit_tab import AuditTab
@@ -24,7 +25,8 @@ class App:
         root.geometry(f"1000x{height}")
         root.minsize(900, 600)
 
-        self.ui = UI(root, detect_language())
+        saved = settings.load().get("language")
+        self.ui = UI(root, saved if saved in LANGUAGES else detect_language())
 
         self.canvas = tk.Canvas(root, bg=BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
@@ -89,6 +91,7 @@ class App:
 
     def on_language(self, name: str) -> None:
         self.ui.lang = next(code for code, n in LANGUAGES.items() if n == name)
+        settings.save(language=self.ui.lang)
         self.apply_language()
 
     def apply_language(self) -> None:

@@ -12,6 +12,7 @@ from .. import report
 from ..analyzer import LABEL_ORDER, analyze
 from ..friendly import KEY as KIND_KEY
 from ..friendly import LEVELS
+from ..reuse import ReuseTracker
 from .theme import DARKER, GREEN, PANEL, RED
 from .widgets import UI
 
@@ -66,6 +67,7 @@ class AuditTab:
 
     def _worker(self, path: str) -> None:
         stats = []
+        tracker = ReuseTracker()
         try:
             with open(path, encoding="utf-8", errors="replace") as fh:
                 for line in fh:
@@ -75,11 +77,12 @@ class AuditTab:
                     a = analyze(pw)  # only aggregate numbers are kept, never the password
                     stats.append(SimpleNamespace(label=a.label, pattern_kinds=a.pattern_kinds,
                                                  estimated_bits=a.estimated_bits, length=a.length))
+                    tracker.add(pw)
                     self._n = len(stats)
         except OSError:
             self._result = ("error", None)
             return
-        self._result = ("done", report.aggregate(stats)) if stats else ("empty", None)
+        self._result = ("done", report.aggregate(stats, tracker.summary())) if stats else ("empty", None)
 
     def _poll(self) -> None:
         if self._result is None:
@@ -136,6 +139,11 @@ class AuditTab:
             c.create_text(170 + width + 8, y + 9, anchor="w", fill=GREEN, font=(fam, 10),
                           text=f"{n:,}  ({100 * n / total:.1f}%)")
         lines: list[tuple[str, str]] = []
+        reuse = agg.get("reuse", {})
+        for key, field in (("au_dupes", "exact_duplicates"), ("au_similar", "similar_to_another")):
+            n = reuse.get(field, 0)
+            if n:
+                lines.append(("bad", " [-] " + ui.tr(key, n=f"{n:,}", pct=f"{100 * n / total:.1f}")))
         if agg["pattern_counts"]:
             lines.append(("head", ui.tr("au_issues")))
             for kind, n in agg["pattern_counts"].items():

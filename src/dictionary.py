@@ -35,8 +35,11 @@ class Dictionary:
 
     @classmethod
     def load(cls, data_dir: Path = DATA_DIR) -> "Dictionary":
+        # The EFF passphrase list is part of the vocabulary so generated passphrases
+        # are scored consistently (about 13 bits per word).
         return cls(_read_tokens(data_dir / "common_passwords.txt"),
-                   _read_tokens(data_dir / "common_words.txt"))
+                   _read_tokens(data_dir / "common_words.txt")
+                   + _read_tokens(data_dir / "eff_large_wordlist.txt"))
 
     @staticmethod
     def _candidates(token: str) -> list[tuple[str, bool]]:
@@ -94,3 +97,9 @@ class Dictionary:
 @lru_cache(maxsize=1)
 def default_dictionary() -> Dictionary:
     return Dictionary.load()
+
+
+@lru_cache(maxsize=1)
+def passphrase_words() -> tuple[str, ...]:
+    """The 7,776-word EFF list used by the passphrase generator."""
+    return tuple(_read_tokens(DATA_DIR / "eff_large_wordlist.txt"))

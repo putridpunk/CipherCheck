@@ -126,5 +126,86 @@ class AggregateReportTests(unittest.TestCase):
                 report.write_aggregate(agg, Path(tmp) / "a.pdf")
 
 
+class SettingsTests(unittest.TestCase):
+    def test_roundtrip_and_corruption(self):
+        import os
+        import tempfile
+        from pathlib import Path
+        from src import settings
+        with tempfile.TemporaryDirectory() as tmp:
+            os.environ["CIPHERCHECK_CONFIG_DIR"] = tmp
+            try:
+                self.assertEqual(settings.load(), {})
+                self.assertTrue(settings.save(language="de"))
+                self.assertEqual(settings.load()["language"], "de")
+                (Path(tmp) / "settings.json").write_text("{broken", encoding="utf-8")
+                self.assertEqual(settings.load(), {})
+            finally:
+                del os.environ["CIPHERCHECK_CONFIG_DIR"]
+
+
+class PassphraseTests(unittest.TestCase):
+    def test_generator(self):
+        from src.dictionary import passphrase_words
+        from src.friendly import generate_passphrase
+        self.assertEqual(len(passphrase_words()), 7776)
+        p = generate_passphrase(5)
+        self.assertEqual(len(p.split("-")), 5)
+        self.assertNotEqual(p, generate_passphrase(5))
+        self.assertTrue(all(w in passphrase_words() for w in p.split("-")))
+        self.assertIn(analyze(p).label, ("STRONG", "VERY STRONG"))
+
+    def test_cli(self):
+        self.assertEqual(main(["--passphrase"]), 0)
+        self.assertEqual(main(["--passphrase", "2"]), 2)
+
+
+class ReuseTests(unittest.TestCase):
+    def test_base_word(self):
+        from src.reuse import base_word
+        self.assertEqual(base_word("Summer2024!"), base_word("summer2025"))
+        self.assertEqual(base_word("P@ssw0rd"), base_word("password1"))
+
+    def test_tracker_counts(self):
+        from src.reuse import ReuseTracker
+        t = ReuseTracker()
+        for pw in ["Summer2024!", "summer2025", "Summer2024!", "Zq7!unique-Secret", "abc"]:
+            t.add(pw)
+        s = t.summary()
+        self.assertEqual(s["exact_duplicates"], 2)
+        self.assertEqual(s["similar_to_another"], 3)
+        self.assertEqual(s["similar_groups"], 1)
+
+    def test_in_aggregate(self):
+        from src.reuse import ReuseTracker
+        pws = ["Summer2024!", "summer2025", "Zq7!unique-Secret"]
+        t = ReuseTracker()
+        for p in pws:
+            t.add(p)
+        agg = report.aggregate([analyze(p) for p in pws], t.summary())
+        self.assertEqual(agg["reuse"]["similar_to_another"], 2)
+        self.assertIn("Near-copies", report.aggregate_text(agg))
+
+
+class CliLanguageTests(unittest.TestCase):
+    def test_friendly_output_in_every_language(self):
+        for lang in LANGUAGES:
+            out = report.to_friendly_text(analyze("Summer2024!"), lang)
+            self.assertIn("CIPHERCHECK", out)
+            self.assertNotIn("Summer2024!", out)
+            self.assertIn("/100", out)
+
+    def test_cli_lang_and_hash(self):
+        self.assertEqual(main(["-p", "password", "--lang", "ar", "-q"]), 0)
+        self.assertEqual(main(["--hash", "a" * 32, "--lang", "ja"]), 0)
+
+    def test_txt_report_in_language(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            out = report.write_report(analyze("password"), Path(tmp) / "r.txt", lang="pt")
+            self.assertIn("MUITO FRACA", out.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import getpass
-import json
 import sys
 from pathlib import Path
 
 from . import __version__, hashes, report
 from .analyzer import analyze
+from .friendly import generate_passphrase
+from .i18n import LANGUAGES
+from .reuse import ReuseTracker
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -26,8 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
                           "and print aggregate statistics only")
     src.add_argument("--hash", metavar="HASH",
                      help="identify a hash format and explain its security properties (no cracking)")
-    p.add_argument("-r", "--report", type=Path, metavar="PATH",
-                   help="write a report to PATH")
+    src.add_argument("--passphrase", nargs="?", const=5, type=int, metavar="WORDS",
+                     help="print a random passphrase of WORDS words (default 5) and exit")
+    p.add_argument("--lang", choices=sorted(LANGUAGES), metavar="CODE",
+                   help="plain-language output in this language instead of the technical English "
+                        f"report ({', '.join(sorted(LANGUAGES))}); also applies to TXT reports")
+    p.add_argument("-r", "--report", type=Path, metavar="PATH", help="write a report to PATH")
     p.add_argument("--format", choices=sorted(report.RENDERERS), help="report format (default: from extension)")
     p.add_argument("-q", "--quiet", action="store_true", help="do not print the report to the terminal")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -35,18 +41,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _batch(path: Path, args: argparse.Namespace) -> int:
+    analyses, tracker = [], ReuseTracker()
     try:
         with path.open(encoding="utf-8", errors="replace") as fh:
-            analyses = [analyze(line.rstrip("\r\n")) for line in fh if line.strip()]
+            for line in fh:
+                pw = line.rstrip("\r\n")
+                if pw:
+                    analyses.append(analyze(pw))
+                    tracker.add(pw)
     except OSError as exc:
         print(f"error: cannot read {path}: {exc}", file=sys.stderr)
         return 2
-    agg = report.aggregate(analyses)
+    agg = report.aggregate(analyses, tracker.summary())
     if not args.quiet:
-        print(report.aggregate_text(agg))
+        print(report.aggregate_friendly(agg, args.lang) if args.lang else report.aggregate_text(agg))
     if args.report:
         try:
-            out = report.write_aggregate(agg, args.report, args.format)
+            out = report.write_aggregate(agg, args.report, args.format, args.lang)
         except (OSError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -55,10 +66,22 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # non-Latin scripts on Windows consoles
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
     args = build_parser().parse_args(argv)
 
+    if args.passphrase is not None:
+        if not 3 <= args.passphrase <= 12:
+            print("error: --passphrase takes between 3 and 12 words", file=sys.stderr)
+            return 2
+        print(generate_passphrase(args.passphrase))
+        return 0
+
     if args.hash is not None:
-        print(hashes.to_text(args.hash))
+        print(hashes.to_text(args.hash, args.lang or "en"))
         return 0
 
     if args.file:
@@ -79,10 +102,10 @@ def main(argv: list[str] | None = None) -> int:
 
     result = analyze(password)
     if not args.quiet:
-        print(report.to_text(result))
+        print(report.to_friendly_text(result, args.lang) if args.lang else report.to_text(result))
     if args.report:
         try:
-            out = report.write_report(result, args.report, args.format)
+            out = report.write_report(result, args.report, args.format, args.lang)
         except (OSError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2

@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-24
+
 ### Added
 - Application icon (a green `C_` on a dark tile) for the Windows executables, the installer, the macOS app and the window; regenerate with `tools/make_icon.py`.
 - Keyboard shortcuts in the app: `Ctrl+1/2/3` switch tabs, `Ctrl+G` generates a password, `Esc` clears the current input.
@@ -57,7 +59,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/putridpunk/CipherCheck/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/putridpunk/CipherCheck/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/putridpunk/CipherCheck/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/putridpunk/CipherCheck/compare/v0.1.0...v0.2.0

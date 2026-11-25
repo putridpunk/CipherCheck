@@ -18,6 +18,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **Hash-cracking demo** (Hash tab): an educational "attempt demo crack" button tries an MD5/SHA-1 hash against the bundled 100,000 common passwords. It only ever finds one of those, never a real, unique or salted password.
 - **Check for updates:** an on-demand button (and `--check-update` on the CLI) asks GitHub's public release API whether a newer version exists. The only network access anywhere in the app; it never runs on its own.
 
+### Fixed
+- **The window could get stuck resizing itself forever** on a screen too small for the current content (a large text size across several tabs' worth of new fields). It now stops growing once it has reached the screen's own limit instead of repeatedly asking for the same size.
+
 ## [0.6.3] - 2026-11-24
 
 ### Fixed

@@ -6,6 +6,7 @@ entropy figures, pattern *kinds* and recommendations.
 
 from __future__ import annotations
 
+import csv
 import html
 import json
 from collections import Counter
@@ -63,8 +64,9 @@ def to_text(a: Analysis) -> str:
               f"  Theoretical (random-character model): {a.theoretical_bits} bits",
               f"  Estimated   (pattern-aware):          {a.estimated_bits} bits",
               "", "Estimated time to guess (average):",
-              f"  Offline, fast hash : {a.crack_time['offline_fast_hash']}",
-              f"  Online, throttled  : {a.crack_time['online_throttled']}",
+              f"  Offline, fast hash (e.g. MD5)     : {a.crack_time['offline_fast_hash']}",
+              f"  Offline, slow hash (e.g. bcrypt)  : {a.crack_time['offline_slow_hash']}",
+              f"  Online, rate-limited login        : {a.crack_time['online_throttled']}",
               "", "Recommendations:"]
     lines += [f"- {r}" for r in a.recommendations]
     lines += ["", BAR]
@@ -106,8 +108,9 @@ td.sev{{font-weight:700;white-space:nowrap}} .critical{{color:#b00}} .high{{colo
 <h2>Entropy</h2>
 <p>Theoretical: <b>{a.theoretical_bits}</b> bits &middot; Estimated: <b>{a.estimated_bits}</b> bits<br>
 <small>{e(d['entropy']['note'])}</small></p>
-<p>Average time to guess: offline fast hash <b>{e(a.crack_time['offline_fast_hash'])}</b>,
-online throttled <b>{e(a.crack_time['online_throttled'])}</b></p>
+<p>Average time to guess: offline fast hash (MD5) <b>{e(a.crack_time['offline_fast_hash'])}</b>,
+offline slow hash (bcrypt) <b>{e(a.crack_time['offline_slow_hash'])}</b>,
+online rate-limited login <b>{e(a.crack_time['online_throttled'])}</b></p>
 <h2>Recommendations</h2><ul>{recs}</ul>
 <p><small>Generated {e(d['generated_at'])} by CipherCheck {e(__version__)}. The password is not included in this report.</small></p>
 </body></html>
@@ -151,8 +154,8 @@ def aggregate(analyses: Sequence[Summarisable], reuse: dict | None = None) -> di
 
 
 def aggregate_counts(n: int, labels: Counter, kinds: Counter, bits_sum: float, length_sum: int,
-                     reuse: dict | None = None) -> dict:
-    return {
+                     reuse: dict | None = None, policy_result: dict | None = None) -> dict:
+    agg = {
         "tool": "CipherCheck",
         "version": __version__,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -166,6 +169,34 @@ def aggregate_counts(n: int, labels: Counter, kinds: Counter, bits_sum: float, l
             {"kind": k, "count": c, "percent": round(100 * c / n, 1),
              "description": PATTERN_TEXT.get(k, k), "recommendation": PATTERN_ADVICE.get(k, "")}
             for k, c in kinds.most_common()] if n else [],
+    }
+    if policy_result is not None:
+        total = n or 1
+        agg["policy"] = {
+            "key": policy_result["key"],
+            "passed": policy_result["passed"],
+            "failed": policy_result["failed"],
+            "pass_percent": round(100 * policy_result["passed"] / total, 1) if n else 0,
+            "reasons": policy_result["reasons"],
+        }
+    return agg
+
+
+def compare_aggregates(old: dict, new: dict) -> dict:
+    """How `new` differs from a previous audit `old` of the same kind of dataset."""
+    old_total, new_total = old["total"] or 1, new["total"] or 1
+
+    def weak_percent(agg: dict, total: int) -> float:
+        counts = agg["assessment_counts"]
+        return 100 * (counts.get("VERY WEAK", 0) + counts.get("WEAK", 0)) / total
+
+    old_weak, new_weak = weak_percent(old, old_total), weak_percent(new, new_total)
+    return {
+        "delta_average_bits": round(new["average_estimated_bits"] - old["average_estimated_bits"], 1),
+        "delta_average_length": round(new["average_length"] - old["average_length"], 1),
+        "delta_weak_percent": round(new_weak - old_weak, 1),
+        "improved": new_weak < old_weak,
+        "unchanged": new_weak == old_weak,
     }
 
 
@@ -189,8 +220,40 @@ def aggregate_text(agg: dict) -> str:
         lines += [f"  {p['percent']:>5}%  {p['description']}", f"          Fix: {p['recommendation']}"]
     if not agg.get("most_common_problems"):
         lines.append("  none")
+    pol = agg.get("policy")
+    if pol:
+        lines += ["", f"Policy '{pol['key']}':",
+                  f"  Passed: {pol['passed']} ({pol['pass_percent']}%)  Failed: {pol['failed']}"]
+        for reason, c in pol.get("reasons", {}).items():
+            lines.append(f"    {reason}: {c}")
     lines += ["", "No passwords are stored in this summary.", BAR]
     return "\n".join(lines)
+
+
+def aggregate_csv(agg: dict) -> str:
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["metric", "value"])
+    w.writerow(["total", agg["total"]])
+    w.writerow(["average_length", agg["average_length"]])
+    w.writerow(["average_estimated_bits", agg["average_estimated_bits"]])
+    for lbl, c in agg["assessment_counts"].items():
+        w.writerow([f"count_{lbl}", c])
+    for key, value in agg.get("reuse", {}).items():
+        w.writerow([f"reuse_{key}", value])
+    for p in agg.get("most_common_problems", []):
+        w.writerow([f"problem_{p['kind']}_percent", p["percent"]])
+    pol = agg.get("policy")
+    if pol:
+        w.writerow(["policy", pol["key"]])
+        w.writerow(["policy_passed", pol["passed"]])
+        w.writerow(["policy_failed", pol["failed"]])
+        w.writerow(["policy_pass_percent", pol["pass_percent"]])
+        for reason, c in pol.get("reasons", {}).items():
+            w.writerow([f"policy_failed_{reason}", c])
+    return buf.getvalue()
 
 
 def aggregate_json(agg: dict) -> str:
@@ -209,6 +272,13 @@ def aggregate_html(agg: dict) -> str:
     probs = "\n".join(
         f"<tr><td>{p['percent']}%</td><td>{e(p['description'])}<br><i>Fix: {e(p['recommendation'])}</i></td></tr>"
         for p in agg.get("most_common_problems", [])) or '<tr><td colspan="2">None found.</td></tr>'
+    pol = agg.get("policy")
+    policy_html = ""
+    if pol:
+        reasons = "".join(f"<li>{e(reason)}: {c}</li>" for reason, c in pol.get("reasons", {}).items())
+        policy_html = (f"<h2>Policy &ldquo;{e(pol['key'])}&rdquo;</h2>"
+                      f"<p>Passed: <b>{pol['passed']:,}</b> ({pol['pass_percent']}%) &middot; "
+                      f"Failed: <b>{pol['failed']:,}</b></p><ul>{reasons}</ul>")
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <title>CipherCheck audit summary</title>
@@ -225,13 +295,14 @@ average estimated entropy {agg['average_estimated_bits']} bits</p>
 <p>Passwords used more than once: <b>{reuse.get('exact_duplicates', 0):,}</b> ({100 * reuse.get('exact_duplicates', 0) / total:.1f}%)<br>
 Near-copies of another password (same base word): <b>{reuse.get('similar_to_another', 0):,}</b> ({100 * reuse.get('similar_to_another', 0) / total:.1f}%)</p>
 <h2>Most common problems</h2><table>{probs}</table>
+{policy_html}
 <p><small>Generated {e(agg['generated_at'])} by CipherCheck {e(agg['version'])}.
 No passwords are stored in this summary.</small></p>
 </body></html>
 """
 
 
-AGG_RENDERERS = {"txt": aggregate_text, "json": aggregate_json, "html": aggregate_html}
+AGG_RENDERERS = {"txt": aggregate_text, "json": aggregate_json, "html": aggregate_html, "csv": aggregate_csv}
 
 
 def write_aggregate(agg: dict, path: str | Path, fmt: str | None = None,
@@ -251,7 +322,8 @@ def to_friendly_text(a: Analysis, lang: str) -> str:
     from .friendly import explain  # local import: friendly depends on analyzer only
     r = explain(a, lang)
     lines = [BAR, f"{'CIPHERCHECK':^36}".rstrip(), BAR, "",
-             f"{r.verdict}  ({a.score}/100)", r.headline, t(lang, "crack", time=r.crack_time)]
+             f"{r.verdict}  ({a.score}/100)", r.headline, t(lang, "crack", time=r.crack_time),
+             t(lang, "crack_slow", time=r.crack_time_slow), t(lang, "crack_online", time=r.crack_time_online)]
     for hdr, items, mark in (("hdr_bad", r.bad, "-"), ("hdr_good", r.good, "+"), ("hdr_tips", r.tips, ">")):
         if items:
             lines += ["", t(lang, hdr)] + [f" [{mark}] {x}" for x in items]

@@ -9,13 +9,15 @@ from tkinter import filedialog
 
 from .. import report
 from ..analyzer import LABEL_ORDER
-from ..audit import audit_file
+from ..audit import NoPasswordColumn, audit_file
 from ..friendly import KEY as KIND_KEY
 from ..friendly import LEVELS
+from ..policy import PRESETS as POLICY_PRESETS
 from .theme import DARKER, DIM, GREEN, PANEL, RED
 from .widgets import UI
 
 POLL_MS = 120
+POLICY_KEYS = ["none", "basic", "nist", "strong"]
 
 
 class AuditTab:
@@ -28,6 +30,8 @@ class AuditTab:
         self._result: tuple[str, dict | None] | None = None
         self._thread: threading.Thread | None = None
         self._cancel = threading.Event()
+        self._policy_i = 0  # index into POLICY_KEYS; "none" by default
+        self._previous_agg: dict | None = None
 
         self.intro = ui.label(page, size=10, color=DIM, wraplength=600, justify="center")
         self.intro.pack(padx=30, pady=(12, 4), fill="x")
@@ -38,8 +42,11 @@ class AuditTab:
         self.choose_btn = buttons.button(self.choose_file)
         self.cancel_btn = buttons.button(self.cancel)
         self.save_btn = buttons.button(self.save_report)
+        self.policy_btn = buttons.button(self.cycle_policy)
         self.status = ui.label(page, size=10, wraplength=600)
         self.status.pack(pady=(8, 0))
+        self.compare = ui.label(page, size=9, color=DIM, wraplength=600, justify="center")
+        self.compare.pack(pady=(2, 0))
         self.progress = tk.Canvas(page, width=600, height=8, bg=PANEL, highlightthickness=0)
         self.progress.pack(pady=(2, 0))
         self.total = ui.label(page, size=12, bold=True)
@@ -62,6 +69,7 @@ class AuditTab:
             return
         self._agg = None
         self.status.config(text="")
+        self.compare.config(text="")
         self.render()
 
     def apply_language(self) -> None:
@@ -71,13 +79,25 @@ class AuditTab:
         self.choose_btn.config(text=ui.tr("au_choose"))
         self.cancel_btn.config(text=ui.tr("au_cancel"))
         self.save_btn.config(text=ui.tr("save_report"))
+        self._update_policy_btn()
         self._sync_buttons()
         self.render()
+
+    def _update_policy_btn(self) -> None:
+        key = POLICY_KEYS[self._policy_i]
+        self.policy_btn.config(text=self.ui.tr("au_policy_btn", name=self.ui.tr(f"au_policy_{key}")))
+
+    def cycle_policy(self) -> None:
+        if self.running:
+            return
+        self._policy_i = (self._policy_i + 1) % len(POLICY_KEYS)
+        self._update_policy_btn()
 
     def _sync_buttons(self) -> None:
         busy = self.running
         self.cancel_btn.config(state="normal" if busy else "disabled")
         self.choose_btn.config(state="disabled" if busy else "normal")
+        self.policy_btn.config(state="disabled" if busy else "normal")
 
     # ----- running the audit (background thread keeps the window responsive) -----
     def choose_file(self) -> None:
@@ -110,8 +130,13 @@ class AuditTab:
         self._lines, self._fraction = lines, fraction
 
     def _worker(self, path: str, cancel: threading.Event) -> None:
+        key = POLICY_KEYS[self._policy_i]
+        policy = POLICY_PRESETS.get(key)
         try:
-            agg = audit_file(path, progress=self._on_progress, cancel=cancel)
+            agg = audit_file(path, progress=self._on_progress, cancel=cancel, policy=policy)
+        except NoPasswordColumn:
+            self._result = ("csv_error", None)
+            return
         except OSError:
             self._result = ("error", None)
             return
@@ -131,15 +156,33 @@ class AuditTab:
             return
         kind, agg = self._result
         if kind == "done":
+            assert agg is not None  # only None for "error"/"cancelled"/"empty"/"csv_error"
+            self._compare_with_previous(agg)
+            self._previous_agg = agg
             self._agg = agg
             self.status.config(text="")
         else:
-            key = {"error": "au_error", "empty": "au_empty", "cancelled": "au_cancelled"}[kind]
+            key = {"error": "au_error", "empty": "au_empty", "cancelled": "au_cancelled",
+                   "csv_error": "au_csv_nocolumn"}[kind]
             self.status.config(text=self.ui.tr(key), fg=RED if kind != "cancelled" else DIM)
             if kind != "cancelled":
                 self._agg = None
         self._sync_buttons()
         self.render()
+
+    def _compare_with_previous(self, agg: dict) -> None:
+        ui = self.ui
+        if self._previous_agg is None:
+            self.compare.config(text="")
+            return
+        delta = report.compare_aggregates(self._previous_agg, agg)
+        if delta["unchanged"]:
+            self.compare.config(text=ui.tr("au_compare_same"))
+            return
+        bits = delta["delta_average_bits"]
+        pct = delta["delta_weak_percent"]
+        key = "au_compare_better" if delta["improved"] else "au_compare_worse"
+        self.compare.config(text=ui.tr(key, bits=f"{abs(bits):.1f}", pct=f"{abs(pct):.1f}"))
 
     def stop_for_close(self) -> None:
         """Called when the window is closing: stop the audit and give its workers a moment."""
@@ -154,7 +197,7 @@ class AuditTab:
             return
         path = filedialog.asksaveasfilename(
             defaultextension=".html", initialfile="ciphercheck-audit",
-            filetypes=[("HTML", "*.html"), ("Text", "*.txt"), ("JSON", "*.json")])
+            filetypes=[("HTML", "*.html"), ("Text", "*.txt"), ("JSON", "*.json"), ("CSV", "*.csv")])
         if not path:
             return
         fmt = Path(path).suffix.lstrip(".").lower()
@@ -204,4 +247,10 @@ class AuditTab:
             lines.append(("head", ui.tr("au_issues")))
             for kind, n in agg["pattern_counts"].items():
                 lines.append(("bad", f" [-] {100 * n / total:.0f}%  {ui.tr('p_' + KIND_KEY[kind])}"))
+        pol = agg.get("policy")
+        if pol:
+            lines.append(("head", ui.tr("au_policy_result", name=ui.tr(f"au_policy_{pol['key']}"),
+                                        passed=f"{pol['passed']:,}", pct=f"{pol['pass_percent']}")))
+            for reason, n in pol.get("reasons", {}).items():
+                lines.append(("bad", f" [-] {100 * n / total:.0f}%  {ui.tr('pr_' + reason)}"))
         ui.write(self.text, lines)

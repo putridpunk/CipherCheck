@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 from .analyzer import Analysis, analyze
 from .dictionary import passphrase_words
-from .entropy import OFFLINE_GUESSES_PER_SEC
+from .entropy import OFFLINE_GUESSES_PER_SEC, OFFLINE_SLOW_GUESSES_PER_SEC, ONLINE_GUESSES_PER_SEC
 from .i18n import t, unit
 
 # label -> (level 1..5, colour)
@@ -24,10 +24,10 @@ LEVELS = {
     "STRONG": (4, "#00ff41"),
     "VERY STRONG": (5, "#7dffb0"),
 }
-PROBLEM_KINDS = ("common_password", "breached", "word", "sequence", "repeat_char",
+PROBLEM_KINDS = ("common_password", "breached", "personal", "word", "sequence", "repeat_char",
                  "repeat_block", "keyboard", "year")
-KEY = {"common_password": "common", "breached": "breached", "word": "word", "sequence": "sequence",
-       "repeat_char": "repeat_char", "repeat_block": "repeat_block",
+KEY = {"common_password": "common", "breached": "breached", "personal": "personal", "word": "word",
+       "sequence": "sequence", "repeat_char": "repeat_char", "repeat_block": "repeat_block",
        "keyboard": "keyboard", "year": "year"}
 
 
@@ -38,6 +38,8 @@ class FriendlyReport:
     level: int  # 1..5, for the strength bar
     headline: str
     crack_time: str
+    crack_time_slow: str
+    crack_time_online: str
     bad: list[str] = field(default_factory=list)
     good: list[str] = field(default_factory=list)
     tips: list[str] = field(default_factory=list)
@@ -60,7 +62,10 @@ def duration(seconds: float, lang: str = "en") -> str:
 
 def explain(a: Analysis, lang: str = "en") -> FriendlyReport:
     level, color = LEVELS[a.label]
-    seconds = 2 ** max(a.estimated_bits - 1, 0) / OFFLINE_GUESSES_PER_SEC
+    guesses = 2 ** max(a.estimated_bits - 1, 0)
+    seconds = guesses / OFFLINE_GUESSES_PER_SEC
+    seconds_slow = guesses / OFFLINE_SLOW_GUESSES_PER_SEC
+    seconds_online = guesses / ONLINE_GUESSES_PER_SEC
     kinds = {m.kind for m in a.matches}
 
     bad: list[str] = []
@@ -97,7 +102,8 @@ def explain(a: Analysis, lang: str = "en") -> FriendlyReport:
     tips.append(t(lang, "t_unique"))
 
     return FriendlyReport(t(lang, f"v{level}"), color, level, t(lang, f"h{level}"),
-                          duration(seconds, lang), bad, good, list(dict.fromkeys(tips)))
+                          duration(seconds, lang), duration(seconds_slow, lang),
+                          duration(seconds_online, lang), bad, good, list(dict.fromkeys(tips)))
 
 
 def generate_password(length: int = 16) -> str:

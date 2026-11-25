@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 import tkinter as tk
 import webbrowser
 from pathlib import Path
@@ -91,6 +92,14 @@ class App:
                                     "github.com/putridpunk")
         self.footer.pack(side="bottom", pady=(0, 6))
         self.footer.bind("<Button-1>", lambda e: webbrowser.open(REPO_URL))
+        self._update_checking = False
+        self._update_url: str | None = None
+        self._update_thread: threading.Thread | None = None
+        self._update_thread_result: tuple[bool, tuple[str, str] | None] | None = None
+        self.update_status = ui.label(self.panel, size=8, color=DIM, cursor="hand2",
+                                      wraplength=1, justify="center")
+        self.update_status.pack(side="bottom", pady=(0, 0))
+        self.update_status.bind("<Button-1>", lambda e: self.on_update_click())
         content = tk.Frame(self.panel, bg=PANEL)
         content.pack(fill="both", expand=True)
         self.tab_buttons: dict[str, tk.Button] = {}
@@ -225,12 +234,60 @@ class App:
             b.config(text=ui.tr("tab_" + name))
         for tab in self.tabs.values():
             tab.apply_language()
+        if not self._update_checking:
+            self._update_url = None
+            self.update_status.config(text=ui.tr("upd_check"), fg=DIM)
         self.fit_panel()
 
     def _blink_title(self) -> None:
         self._blink = not self._blink
         self.title.config(text="CIPHERCHECK" + ("_" if self._blink else " "))
         self.root.after(550, self._blink_title)
+
+    # ----- update check (the only network access in the app; only on request) -----
+    def on_update_click(self) -> None:
+        if self._update_url:
+            webbrowser.open(self._update_url)
+        elif not self._update_checking:
+            self.check_update()
+
+    def check_update(self) -> None:
+        self._update_checking = True
+        self._update_thread_result = None
+        self.update_status.config(text=self.ui.tr("upd_checking"), fg=DIM, cursor="arrow")
+        self._update_thread = threading.Thread(target=self._update_worker, daemon=True)
+        self._update_thread.start()
+        self._poll_update()
+
+    def _update_worker(self) -> None:
+        # Runs in a background thread: touches only plain Python state, never Tk,
+        # which (like the audit worker thread) is only ever driven from the main thread.
+        from .. import update_check
+        try:
+            self._update_thread_result = (False, update_check.check_for_update())
+        except update_check.UpdateCheckError:
+            self._update_thread_result = (True, None)
+
+    def _poll_update(self) -> None:
+        if self._update_thread is not None and self._update_thread.is_alive():
+            self.root.after(100, self._poll_update)
+            return
+        assert self._update_thread_result is not None
+        error, result = self._update_thread_result
+        self._update_done(result, error)
+
+    def _update_done(self, result: tuple[str, str] | None, error: bool) -> None:
+        self._update_checking = False
+        ui = self.ui
+        self.update_status.config(cursor="hand2")
+        if error:
+            self.update_status.config(text=ui.tr("upd_error"), fg=DIM)
+        elif result is None:
+            self.update_status.config(text=ui.tr("upd_latest"), fg=DIM)
+        else:
+            version, url = result
+            self._update_url = url
+            self.update_status.config(text=ui.tr("upd_available", v=version), fg=GREEN)
 
 
 def hold_instance_mutex() -> None:

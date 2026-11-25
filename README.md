@@ -4,11 +4,11 @@
 [![Latest release](https://img.shields.io/github/v/release/putridpunk/CipherCheck)](https://github.com/putridpunk/CipherCheck/releases/latest)
 [![Licence: PolyForm Noncommercial](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
-![Offline](https://img.shields.io/badge/network-none-brightgreen)
+![Offline](https://img.shields.io/badge/network-opt--in%20only-brightgreen)
 
 A modular password security auditing tool developed in Python. Evaluates password strength through entropy estimation, pattern recognition, dictionary-based detection and security analysis. Features local processing, automated testing and exportable security reports.
 
-Everything runs locally: no network access, no telemetry, and exported reports never contain the password.
+Everything runs locally: no automatic network access, no telemetry, and exported reports never contain the password. The one exception is an optional, on-demand "check for updates" (a plain request to GitHub's public release API, with no personal data); it only ever runs when you ask for it.
 
 ![The Analyze tab](docs/img/analyze.png)
 
@@ -40,11 +40,11 @@ The executables are not code-signed, so Windows SmartScreen / macOS Gatekeeper m
 
 The app has a Matrix/hacker theme and speaks plain language, in 9 languages (English, Português, Español, Français, Deutsch, Русский, العربية, 日本語, 简体中文). Pick one from the menu in the top-right corner; the choice is remembered, and the first launch follows your system language.
 
-- **Analyze**: type a password and instantly see how strong it is, what is wrong, how long a hacker would need, and how to improve it. *Generate strong password* turns what you typed into a strong password that still resembles it (or creates a brand-new one if the field is empty). *Generate passphrase* makes five random words from the 7,776-word EFF list (about 65 bits, easy to remember). Copying wipes the clipboard after 30 s, and *Save report* exports TXT / JSON / HTML.
-- **Audit**: pick a file of **synthetic** test passwords (one per line), or **drag the file onto the window**, and get a statistics dashboard: strength distribution, most common problems, passwords reused and near-copies of each other (`Summer2024!` / `summer2025`). Big files are analysed on all CPU cores (several times faster than one core), with a progress bar and a *Cancel* button. Passwords are never shown or saved; the summary can be exported. Dragging needs the optional `tkinterdnd2` package, which the release executables include.
-- **Hash**: paste a hash to see which formats it could be and whether they suit password storage. Only the format is checked; nothing is cracked.
+- **Analyze**: type a password and instantly see how strong it is, what is wrong, how long a hacker would need under three attack models (fast offline hash, slow offline hash like bcrypt, and a rate-limited login page), and how to improve it. An optional field lets you check the password against your own personal information (name, birth date, pet, ...; kept only in memory, never saved) so it is flagged the way someone who knows you would guess it. *Generate strong password* turns what you typed into a strong password that still resembles it (or creates a brand-new one if the field is empty). *Generate passphrase* makes five random words from the 7,776-word EFF list (about 65 bits, easy to remember). Copying wipes the clipboard after 30 s, and *Save report* exports TXT / JSON / HTML.
+- **Audit**: pick a file of **synthetic** test passwords (one per line), a **CSV export from a password manager** (the password column is found automatically), or **drag the file onto the window**, and get a statistics dashboard: strength distribution, most common problems, passwords reused and near-copies of each other (`Summer2024!` / `summer2025`). A *Policy* button checks every password against a named policy (`none` / `basic` / `nist` / `strong`) and reports a pass/fail breakdown. After the first audit in a session, later audits are automatically compared with the previous one, so you can see whether things improved. Big files are analysed on all CPU cores (several times faster than one core), with a progress bar and a *Cancel* button. Passwords are never shown or saved; the summary can be exported, including as CSV. Dragging needs the optional `tkinterdnd2` package, which the release executables include.
+- **Hash**: paste a hash to see which formats it could be and whether they suit password storage. Only the format is checked; nothing is cracked. An educational *demo crack* button additionally tries an MD5/SHA-1 hash against the bundled 100,000 common passwords (it only ever finds one of those, never a real or salted password).
 
-Handy extras: `Ctrl+1/2/3` switch tabs, `Ctrl+G` generates a password, `Esc` clears the current input, and the `A−` / `A+` buttons (top-left) change the text size; both the language and the text size are remembered. The footer shows the version and links to this repository.
+Handy extras: `Ctrl+1/2/3` switch tabs, `Ctrl+G` generates a password, `Esc` clears the current input, the `A−` / `A+` buttons (top-left) change the text size, and *check for updates* (bottom, under the footer) makes one on-demand request to GitHub to see if a newer release exists. Both the language and the text size are remembered. The footer shows the version and links to this repository.
 
 ```powershell
 .\build.ps1          # Windows: runs the tests, then builds ciphercheck.exe and ciphercheck-cli.exe
@@ -67,9 +67,12 @@ python -m src.main -f big.txt -j 4       # ... on 4 worker processes (default: a
 python -m src.main --hash 5f4dcc3b5aa765d61d8327deb882cf99   # identify a hash format (never cracks it)
 python -m src.main --passphrase          # a random 5-word passphrase (3 to 12 words)
 python -m src.main -p "example" --lang pt   # plain-language output in another language
+python -m src.main -p "RexFido2010" --profile "Rex,2010"   # flag your own personal info
+python -m src.main -f export.csv -P strong -r audit.csv    # policy check + CSV import/export
+python -m src.main --check-update        # one on-demand request to GitHub; the only network use
 ```
 
-`--lang` takes `en pt es fr de ru ar ja zh` and switches terminal output, `--hash` explanations, batch summaries and TXT reports to the same plain language the app uses (JSON and HTML reports stay English). `-p/--password` exists but is discouraged (it lands in shell history). Batch mode is meant for **synthetic** test data; it prints only aggregate statistics.
+`--lang` takes `en pt es fr de ru ar ja zh` and switches terminal output, `--hash` explanations, batch summaries and TXT reports to the same plain language the app uses (JSON and HTML reports stay English). `-p/--password` exists but is discouraged (it lands in shell history). Batch mode is meant for **synthetic** test data (one password per line, or a `.csv` export whose password column is detected automatically); it prints only aggregate statistics. `-P/--policy` additionally checks each password against a named policy (`basic`, `nist`, `strong`) and reports pass/fail counts.
 
 ## How it works
 
@@ -79,10 +82,14 @@ python -m src.main -p "example" --lang pt   # plain-language output in another l
 | `src/patterns.py` | Sequences, repeated characters/blocks, keyboard walks, years |
 | `src/dictionary.py` | Local common-password list, word lists (incl. the EFF passphrase list), leetspeak normalisation (`p@ssw0rd` → `password`) |
 | `src/breach.py` | Offline leaked-password check against `src/data/breached.bin` (nothing leaves your computer) |
+| `src/profile.py` | Flags a password that contains the user's own personal information (name, date, ...), supplied only in memory |
 | `src/analyzer.py` | Combines everything into a label, score, findings and recommendations |
 | `src/reuse.py` | Finds identical passwords and near-copies inside a dataset (only hashes are kept in memory) |
-| `src/audit.py` | Audits a whole file on all CPU cores, in chunks, with progress and cancel; only counters come back |
-| `src/report.py` | TXT / JSON / HTML reports, batch aggregation and translated plain-language text |
+| `src/audit.py` | Audits a whole file (or a CSV export's password column) on all CPU cores, in chunks, with progress and cancel; only counters come back |
+| `src/policy.py` | Named pass/fail policies (`basic`, `nist`, `strong`) checked against an analysis |
+| `src/crack_demo.py` | Educational demo: tries to match an MD5/SHA-1 hash against the bundled 100,000 common passwords |
+| `src/update_check.py` | The app's only network access: an on-demand, opt-in check against GitHub's release API |
+| `src/report.py` | TXT / JSON / HTML / CSV reports, batch aggregation, audit-to-audit comparison and translated plain-language text |
 | `src/vulnerabilities.py` | Turns an analysis into categorised weaknesses (severity, why it matters, how to fix) for the detailed reports |
 | `src/hashes.py` | Identifies hash formats (MD5, SHA-*, bcrypt, Argon2, ...) and explains their password-storage properties; a format match is a hint, never proof of origin |
 | `src/friendly.py` | Plain-language explanations, the password generators and the "similar but strong" password |
@@ -102,6 +109,9 @@ Assessment thresholds (estimated bits): `<28` very weak · `<40` weak · `<60` m
 - Bundled data (see `src/data/README.md`): the 100k most common passwords and an 8k-word vocabulary for scoring, plus an offline index of the ~1M most common leaked passwords. The leak check is not a complete breach database: not being found does not prove a password never leaked.
 - Entropy and crack-time numbers are models, not guarantees.
 - `correct-horse-battery` scores *moderate* (~43 bits): three common words are not enough. It is flagged as a passphrase, and five random words reach strong.
+- The *demo crack* button (Hash tab) is a teaching aid, not a cracking tool: it can only ever find one of the 100,000 bundled common passwords, hashed with no salt. It proves nothing about a real, unique or salted hash.
+- The CSV progress bar for very large password-manager exports is an estimate (Python cannot report an exact file position while iterating a CSV reader); the final count is always exact.
+- *Check for updates* is the only thing in CipherCheck that uses the network, and only runs when you click the button or pass `--check-update`; it sends nothing but a request to GitHub's public release API.
 
 ## Tests
 

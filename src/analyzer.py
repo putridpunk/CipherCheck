@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from . import entropy, patterns
+from . import profile as profile_mod
 from .breach import BREACH_BITS, BreachDB, default_breach_db
 from .dictionary import Dictionary, default_dictionary
 from .patterns import Match
@@ -24,6 +25,7 @@ PATTERN_TEXT = {
     "word": "Contains common dictionary word(s)",
     "common_password": "Matches a commonly used password",
     "breached": "Appears in a list of leaked passwords",
+    "personal": "Contains your own personal information (name, date, etc.)",
 }
 PATTERN_ADVICE = {
     "sequence": "Avoid predictable sequences.",
@@ -34,6 +36,8 @@ PATTERN_ADVICE = {
     "word": "Avoid commonly used words.",
     "common_password": "Never use passwords that appear in breach lists.",
     "breached": "Never reuse a password that has leaked; create a new one.",
+    "personal": "Never use names, dates or other facts about yourself; they are the first thing "
+                "someone who knows you (or finds you online) will try.",
 }
 
 
@@ -73,11 +77,13 @@ def _label(bits: float) -> str:
 
 
 def analyze(password: str, dictionary: Dictionary | None = None,
-            breach_db: BreachDB | None = None) -> Analysis:
+            breach_db: BreachDB | None = None, profile: list[str] | None = None) -> Analysis:
     dictionary = dictionary or default_dictionary()
     breach_db = breach_db or default_breach_db()
     n = len(password)
     all_matches = patterns.find_matches(password) + dictionary.find_matches(password)
+    if profile:
+        all_matches += profile_mod.find_matches(password, profile)
     # A lone - _ . or space between two dictionary words is one of ~4 common separators,
     # not a free choice among all symbols (matters for passphrases).
     word_starts = {m.start for m in all_matches if m.kind == "word"}
@@ -116,7 +122,7 @@ def analyze(password: str, dictionary: Dictionary | None = None,
 
     # --- patterns ---
     kinds = {m.kind for m in all_matches}
-    for kind in ("common_password", "breached", "word", "sequence", "repeat_char",
+    for kind in ("common_password", "breached", "personal", "word", "sequence", "repeat_char",
                  "repeat_block", "keyboard", "year"):
         if kind in kinds:
             findings.append(Finding("-", PATTERN_TEXT[kind]))

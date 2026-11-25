@@ -75,17 +75,29 @@ def find_repeats(password: str) -> list[Match]:
     return out
 
 
-# (row, horizontal offset) of each key on a QWERTY layout.
-_ROWS = [("1234567890", 0.0), ("qwertyuiop", 0.5), ("asdfghjkl", 0.75), ("zxcvbnm", 1.25)]
-_KEYPOS = {ch: (r, off + c) for r, (keys, off) in enumerate(_ROWS) for c, ch in enumerate(keys)}
+# (row, horizontal offset) of each key, for every layout checked. A password is a
+# "keyboard walk" if it walks adjacent keys on ANY of these (people type on different
+# keyboards, and QWERTY/AZERTY/QWERTZ only disagree on a handful of letter keys).
+_LAYOUTS = {
+    "qwerty": [("1234567890", 0.0), ("qwertyuiop", 0.5), ("asdfghjkl", 0.75), ("zxcvbnm", 1.25)],
+    "azerty": [("1234567890", 0.0), ("azertyuiop", 0.5), ("qsdfghjklm", 0.75), ("wxcvbn", 1.25)],
+    "qwertz": [("1234567890", 0.0), ("qwertzuiop", 0.5), ("asdfghjkl", 0.75), ("yxcvbnm", 1.25)],
+}
+_KEYPOS = [{ch: (r, off + c) for r, (keys, off) in enumerate(rows) for c, ch in enumerate(keys)}
+           for rows in _LAYOUTS.values()]
 
 
 def _adjacent(a: str, b: str) -> bool:
-    if a == b or a not in _KEYPOS or b not in _KEYPOS:
+    if a == b:
         return False
-    (ra, xa), (rb, xb) = _KEYPOS[a], _KEYPOS[b]
-    dy, dx = abs(ra - rb), abs(xa - xb)
-    return (dy == 0 and dx == 1) or (dy == 1 and dx < 1)
+    for positions in _KEYPOS:
+        if a not in positions or b not in positions:
+            continue
+        (ra, xa), (rb, xb) = positions[a], positions[b]
+        dy, dx = abs(ra - rb), abs(xa - xb)
+        if (dy == 0 and dx == 1) or (dy == 1 and dx < 1):
+            return True
+    return False
 
 
 def find_keyboard(password: str) -> list[Match]:

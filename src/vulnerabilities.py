@@ -41,6 +41,12 @@ def assess(a: Analysis) -> list[Vulnerability]:
             "This exact password is in a collection of leaked passwords that attackers use as a "
             "ready-made guess list; it can be found almost immediately.",
             "Stop using it everywhere and replace it with a new, unique password."))
+    if "personal" in kinds:
+        out.append(Vulnerability(
+            "Personal information", "critical", "Contains your own personal information",
+            "Names, dates and other facts about you are the first thing someone who knows you, "
+            "or can find you online, will try; they are not secret, whatever their length.",
+            "Never build a password from your own name, birth date, pet or similar facts."))
     if a.length < 8:
         out.append(Vulnerability(
             "Length", "high", "Password is very short",

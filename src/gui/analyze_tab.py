@@ -34,6 +34,13 @@ class AnalyzeTab:
         self.privacy = ui.label(page, size=9, color=DIM, wraplength=600)
         self.privacy.pack(pady=(6, 0))
 
+        self.profile_prompt = ui.label(page, size=9, color=DIM, wraplength=600, justify="center")
+        self.profile_prompt.pack(fill="x", padx=30, pady=(8, 2))
+        self.profile_var = tk.StringVar()
+        self.profile_entry = ui.entry(page, self.profile_var, 16)
+        self.profile_entry.pack(fill="x", padx=30, ipady=5)
+        self.profile_var.trace_add("write", lambda *_: self.refresh())
+
         gen_row = ui.button_row(page)
         gen_row.frame.pack(pady=(10, 2))
         self.gen_btn = gen_row.button(self.generate)
@@ -66,6 +73,7 @@ class AnalyzeTab:
         ui = self.ui
         self.prompt.config(text=ui.tr("prompt"), anchor="center")
         self.privacy.config(text=ui.tr("privacy"))
+        self.profile_prompt.config(text=ui.tr("profile_prompt"), anchor="center")
         self.gen_btn.config(text=ui.tr("gen"))
         self.phrase_btn.config(text=ui.tr("phrase_btn"))
         self.copy_btn.config(text=ui.tr("copy"))
@@ -147,8 +155,10 @@ class AnalyzeTab:
         if not path:
             return
         fmt = Path(path).suffix.lstrip(".").lower()
+        profile = [t for t in self.profile_var.get().split(",") if t.strip()] or None
         try:  # the report never contains the password
-            report.write_report(analyze(pw), path, fmt if fmt in report.RENDERERS else "txt")
+            report.write_report(analyze(pw, profile=profile), path,
+                                fmt if fmt in report.RENDERERS else "txt")
         except OSError as exc:
             self.status.config(text=f"> {exc}")
             return
@@ -171,11 +181,16 @@ class AnalyzeTab:
             self.crack.config(text="")
             ui.write(self.text, [("idle", ui.tr("idle_1")), ("idle", ""), ("idle", ui.tr("idle_2"))])
             return
-        r = explain(analyze(pw), ui.lang)
+        profile = [t for t in self.profile_var.get().split(",") if t.strip()] or None
+        r = explain(analyze(pw, profile=profile), ui.lang)
         self.verdict.config(text=r.verdict, fg=r.color)
         self._draw_bar(r.level, r.color)
         self.headline.config(text=r.headline, fg=r.color)
-        self.crack.config(text=ui.tr("crack", time=r.crack_time))
+        self.crack.config(text="\n".join([
+            ui.tr("crack", time=r.crack_time),
+            ui.tr("crack_slow", time=r.crack_time_slow),
+            ui.tr("crack_online", time=r.crack_time_online),
+        ]))
         lines: list[tuple[str, str]] = []
         if r.bad:
             lines += [("head", ui.tr("hdr_bad"))] + [("bad", f" [-] {x}") for x in r.bad]

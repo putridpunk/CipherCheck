@@ -9,9 +9,10 @@ from pathlib import Path
 
 from . import __version__, hashes, report
 from .analyzer import analyze
-from .audit import audit_file
+from .audit import NoPasswordColumn, audit_file
 from .friendly import generate_passphrase
 from .i18n import LANGUAGES
+from .policy import PRESETS as POLICY_PRESETS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,13 +31,23 @@ def build_parser() -> argparse.ArgumentParser:
                      help="identify a hash format and explain its security properties (no cracking)")
     src.add_argument("--passphrase", nargs="?", const=5, type=int, metavar="WORDS",
                      help="print a random passphrase of WORDS words (default 5) and exit")
+    src.add_argument("--check-update", action="store_true",
+                     help="check GitHub for a newer release and exit (contacts github.com; "
+                          "only when you pass this flag)")
     p.add_argument("--lang", choices=sorted(LANGUAGES), metavar="CODE",
                    help="plain-language output in this language instead of the technical English "
                         f"report ({', '.join(sorted(LANGUAGES))}); also applies to TXT reports")
     p.add_argument("-j", "--jobs", type=int, metavar="N",
                    help="batch mode: worker processes (default: automatic, up to 8; 1 = single process)")
+    p.add_argument("--profile", metavar="TEXT",
+                   help="personal information to flag if found in the password (your name, a "
+                        "birth date, a pet's name, ...; comma-separated, kept only in memory)")
+    p.add_argument("-P", "--policy", choices=sorted(POLICY_PRESETS), metavar="NAME",
+                   help="batch mode: check each password against a named policy "
+                        f"({', '.join(sorted(POLICY_PRESETS))}) and report pass/fail counts")
     p.add_argument("-r", "--report", type=Path, metavar="PATH", help="write a report to PATH")
-    p.add_argument("--format", choices=sorted(report.RENDERERS), help="report format (default: from extension)")
+    p.add_argument("--format", choices=sorted(set(report.RENDERERS) | set(report.AGG_RENDERERS)),
+                   help="report format (default: from extension)")
     p.add_argument("-q", "--quiet", action="store_true", help="do not print the report to the terminal")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
@@ -44,13 +55,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _batch(path: Path, args: argparse.Namespace) -> int:
     show = sys.stderr.isatty() and not args.quiet
+    policy = POLICY_PRESETS[args.policy] if args.policy else None
 
     def progress(lines: int, fraction: float) -> None:
         if show:
             print(f"\rAnalysing... {lines:,} passwords ({100 * fraction:.0f}%)", end="", file=sys.stderr, flush=True)
 
     try:
-        agg = audit_file(path, workers=args.jobs, progress=progress)
+        agg = audit_file(path, workers=args.jobs, progress=progress, policy=policy)
+    except NoPasswordColumn as exc:
+        print(f"error: {path}: {exc}", file=sys.stderr)
+        return 2
     except OSError as exc:
         print(f"error: cannot read {path}: {exc}", file=sys.stderr)
         return 2
@@ -90,8 +105,24 @@ def main(argv: list[str] | None = None) -> int:
         print(hashes.to_text(args.hash, args.lang or "en"))
         return 0
 
+    if args.check_update:
+        from . import update_check
+        try:
+            update_result = update_check.check_for_update()
+        except update_check.UpdateCheckError as exc:
+            print(f"error: could not check for updates: {exc}", file=sys.stderr)
+            return 2
+        if update_result is None:
+            print(f"CipherCheck {__version__} is up to date.")
+        else:
+            version, url = update_result
+            print(f"A newer version is available: v{version}\n{url}")
+        return 0
+
     if args.file:
         return _batch(args.file, args)
+
+    profile = [t for t in args.profile.split(",") if t.strip()] if args.profile else None
 
     if args.password is not None:
         print("warning: passwords passed on the command line may be stored in shell history.",
@@ -106,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             print(file=sys.stderr)
             return 130
 
-    result = analyze(password)
+    result = analyze(password, profile=profile)
     if not args.quiet:
         print(report.to_friendly_text(result, args.lang) if args.lang else report.to_text(result))
     if args.report:

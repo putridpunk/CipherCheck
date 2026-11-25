@@ -18,8 +18,9 @@ from collections import defaultdict
 from .patterns import Match
 from .utils import DIGITS, LOWER, SYMBOLS, UPPER, humanize_seconds
 
-OFFLINE_GUESSES_PER_SEC = 1e10  # fast hash (e.g. MD5/NTLM) on a GPU rig
-ONLINE_GUESSES_PER_SEC = 10     # throttled login endpoint
+OFFLINE_GUESSES_PER_SEC = 1e10       # fast hash (e.g. MD5/NTLM) on a GPU rig
+OFFLINE_SLOW_GUESSES_PER_SEC = 1e4   # purpose-built slow hash (e.g. bcrypt/Argon2) on the same rig
+ONLINE_GUESSES_PER_SEC = 10          # throttled login endpoint (rate limit / lockout)
 
 
 def pool_size(password: str) -> int:
@@ -81,9 +82,12 @@ def estimate_entropy(password: str, matches: list[Match]) -> tuple[float, list[M
 
 
 def crack_time(bits: float) -> dict[str, str]:
-    """Average time to guess (half the keyspace) under two attacker models."""
+    """Average time to guess (half the keyspace) under three attacker models:
+    a fast hash (e.g. MD5/NTLM) and a slow, purpose-built hash (e.g. bcrypt/Argon2) cracked
+    offline on a GPU rig, and an online login throttled by a rate limit or lockout."""
     guesses = 2 ** max(bits - 1, 0) if bits < 1000 else float("inf")
     return {
         "offline_fast_hash": humanize_seconds(guesses / OFFLINE_GUESSES_PER_SEC),
+        "offline_slow_hash": humanize_seconds(guesses / OFFLINE_SLOW_GUESSES_PER_SEC),
         "online_throttled": humanize_seconds(guesses / ONLINE_GUESSES_PER_SEC),
     }

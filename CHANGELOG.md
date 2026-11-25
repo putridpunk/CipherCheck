@@ -5,6 +5,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Personal-information check:** an optional field (Analyze tab, `--profile` on the CLI) flags a password built from your own name, birth date, pet, etc. Kept only in memory for the current session; never written to disk.
+- **Three crack-time models:** a fast offline hash (e.g. MD5), a slow, purpose-built offline hash (e.g. bcrypt) and a rate-limited online login, instead of just one number.
+- **Stronger keyboard-walk detection:** recognises AZERTY and QWERTZ layouts in addition to QWERTY.
+- **CSV import for the Audit tab and `-f`:** a password-manager export (Bitwarden, Chrome, 1Password, ...) is read directly; the password column is found automatically from the header.
+- **Password policies:** a *Policy* button in the Audit tab (and `-P/--policy` on the CLI) checks every password against a named policy (`basic`, `nist`, `strong`) and reports a pass/fail breakdown, exportable with the rest of the summary.
+- **Audit comparison:** after the first audit in a session, each later one is automatically compared with the previous one (strength and the share of weak passwords), so you can see whether things improved.
+- **CSV export** for audit summaries, alongside the existing TXT/JSON/HTML.
+- **Hash-cracking demo** (Hash tab): an educational "attempt demo crack" button tries an MD5/SHA-1 hash against the bundled 100,000 common passwords. It only ever finds one of those, never a real, unique or salted password.
+- **Check for updates:** an on-demand button (and `--check-update` on the CLI) asks GitHub's public release API whether a newer version exists. The only network access anywhere in the app; it never runs on its own.
+
 ## [0.6.3] - 2026-11-24
 
 ### Fixed

@@ -33,6 +33,7 @@ ICON = ASSETS_DIR / "ciphercheck.png"
 class App:
     def __init__(self, root: tk.Tk):
         self.root = root
+        self._fitting = False
         root.title("CipherCheck")
         root.configure(bg=BG)
         height = min(840, root.winfo_screenheight() - 90)
@@ -203,20 +204,35 @@ class App:
     def fit_panel(self) -> None:
         """Make the panel as wide as the font size needs (never wider than the window) and let
         wrapped text and button rows adapt, so nothing is cut off at the sides."""
-        wanted = int(PANEL_WIDTH * max(1.0, self.ui.scale))
-        width = max(PANEL_WIDTH, min(wanted, self.root.winfo_width() - 30)) if self.root.winfo_width() > 1 else wanted
-        self.panel.place_configure(width=width)
-        self.ui.set_wrap_width(width - 60)
-        self.ui.refresh_layout()
-        self._grow_window_if_needed()
+        if self._fitting:
+            return  # a resize we triggered ourselves must never re-enter this (avoids a loop)
+        self._fitting = True
+        try:
+            wanted = int(PANEL_WIDTH * max(1.0, self.ui.scale))
+            width = (max(PANEL_WIDTH, min(wanted, self.root.winfo_width() - 30))
+                    if self.root.winfo_width() > 1 else wanted)
+            self.panel.place_configure(width=width)
+            self.ui.set_wrap_width(width - 60)
+            self.ui.refresh_layout()
+            self._grow_window_if_needed()
+        finally:
+            self._fitting = False
 
     def _grow_window_if_needed(self) -> None:
-        """Bigger text needs more room: make the window taller (up to the screen), never shorter."""
+        """Bigger text needs more room: make the window taller, up to the screen's height.
+
+        On a small (or virtual, e.g. CI) screen the content can still be taller than that
+        limit even after clamping to it; comparing against the *clamped* target, not the
+        raw `needed` figure, is what stops this from calling `geometry()` on every single
+        resize event forever once the window is already at that limit.
+        """
         self.root.update_idletasks()
         needed = int(self.panel.winfo_reqheight() / PANEL_RELHEIGHT) + 24
         limit = self.root.winfo_screenheight() - 90
-        if self.root.winfo_height() > 1 and needed > self.root.winfo_height():
-            self.root.geometry(f"{self.root.winfo_width()}x{min(needed, limit)}")
+        target = min(needed, limit)
+        current = self.root.winfo_height()
+        if current > 1 and target > current:
+            self.root.geometry(f"{self.root.winfo_width()}x{target}")
 
     def _on_window_resize(self, event: Any) -> None:
         if event.widget is self.root:

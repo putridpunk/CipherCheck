@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-25
+
 ### Added
 - **Personal-information check:** an optional field (Analyze tab, `--profile` on the CLI) flags a password built from your own name, birth date, pet, etc. Kept only in memory for the current session; never written to disk.
 - **Three crack-time models:** a fast offline hash (e.g. MD5), a slow, purpose-built offline hash (e.g. bcrypt) and a rate-limited online login, instead of just one number.
@@ -110,7 +112,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/putridpunk/CipherCheck/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/putridpunk/CipherCheck/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/putridpunk/CipherCheck/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/putridpunk/CipherCheck/compare/v0.6.0...v0.6.1

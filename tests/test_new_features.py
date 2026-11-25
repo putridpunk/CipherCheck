@@ -287,17 +287,23 @@ class GuiNewFeatureTests(unittest.TestCase):
         self.assertEqual(tab.status.cget("text"), self.app.ui.tr("au_csv_nocolumn"))
 
     def test_update_check_button_shows_result(self):
-        payload = json.dumps({"tag_name": "v0.0.1"}).encode()
-        resp = mock.MagicMock()
-        resp.read.return_value = payload
-        resp.__enter__.return_value = resp
-        with mock.patch("urllib.request.urlopen", return_value=resp):
+        # Patch the high-level function (not urllib.request.urlopen): the check runs in a
+        # background thread, so patching only the low-level call risks the mock being undone
+        # (at the end of a "with" block in the test thread) before that thread gets to it,
+        # letting a real, unbounded network call slip through - this hung Windows CI for 19
+        # minutes on the first release attempt, because DNS lookups ignore urlopen's timeout.
+        with mock.patch("src.update_check.check_for_update", return_value=None):
             self.app.check_update()
-            for _ in range(50):
+            self.assertIsNotNone(self.app._update_thread)
+            self.app._update_thread.join(timeout=5)
+            self.assertFalse(self.app._update_thread.is_alive())
+            # The background thread (and the mocked call) has already finished; all that is
+            # left is for Tk's own 100ms-polling timer to notice and run _update_done.
+            import time
+            for _ in range(40):
                 self.root.update()
                 if not self.app._update_checking:
                     break
-                import time
                 time.sleep(0.05)
         self.assertFalse(self.app._update_checking)
         self.assertEqual(self.app.update_status.cget("text"), self.app.ui.tr("upd_latest"))

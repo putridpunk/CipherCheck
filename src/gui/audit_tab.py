@@ -7,8 +7,10 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
 
+from .. import banned as banned_mod
 from .. import history, report
 from .. import policy as policy_mod
+from .. import profile as profile_mod
 from ..analyzer import LABEL_ORDER
 from ..audit import NoPasswordColumn, audit_file
 from ..friendly import KEY as KIND_KEY
@@ -29,11 +31,13 @@ class AuditTab:
         self._agg: dict | None = None
         self._lines = 0
         self._fraction = 0.0
-        self._result: tuple[str, dict | None] | None = None
+        self._result: tuple[str, dict | None, bool] | None = None
         self._thread: threading.Thread | None = None
         self._cancel = threading.Event()
         self._policy_i = 0  # index into POLICY_KEYS; "none" by default
         self._custom_policy: policy_mod.Policy | None = None
+        self._banned_words: list[str] | None = None
+        self._profiles: dict[str, list[str]] | None = None
         self._previous_agg: dict | None = None
 
         self.intro = ui.label(page, size=10, color=DIM, wraplength=600, justify="center")
@@ -50,6 +54,14 @@ class AuditTab:
         self.policy_btn = policy_row.button(self.cycle_policy)
         self.load_policy_btn = policy_row.button(self.load_policy_file)
         self.gen_policy_btn = policy_row.button(self.generate_for_policy)
+        extra_row = ui.button_row(page)
+        extra_row.frame.pack()
+        self.load_banned_btn = extra_row.button(self.load_banned_words)
+        self.load_profiles_btn = extra_row.button(self.load_profiles)
+        extra_row2 = ui.button_row(page)
+        extra_row2.frame.pack()
+        self.compare_file_btn = extra_row2.button(self.choose_compare_file)
+        self.remediation_btn = extra_row2.button(self.export_remediation)
         self.status = ui.label(page, size=10, wraplength=600)
         self.status.pack(pady=(8, 0))
         self.compare = ui.label(page, size=9, color=DIM, wraplength=600, justify="center")
@@ -88,6 +100,10 @@ class AuditTab:
         self.save_btn.config(text=ui.tr("save_report"))
         self.load_policy_btn.config(text=ui.tr("au_load_policy"))
         self.gen_policy_btn.config(text=ui.tr("au_gen_policy_btn"))
+        self.load_banned_btn.config(text=ui.tr("au_load_banned"))
+        self.load_profiles_btn.config(text=ui.tr("au_load_profiles"))
+        self.compare_file_btn.config(text=ui.tr("au_compare_file_btn"))
+        self.remediation_btn.config(text=ui.tr("au_remediation_btn"))
         self._update_policy_btn()
         self._sync_buttons()
         self.render()
@@ -140,6 +156,59 @@ class AuditTab:
                 pass
         root.after(CLIPBOARD_WIPE_MS, wipe)
 
+    def load_banned_words(self) -> None:
+        if self.running:
+            return
+        path = filedialog.askopenfilename(filetypes=[("Text", "*.txt"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            self._banned_words = banned_mod.load_file(path)
+        except OSError as exc:
+            self.status.config(text=f"> {self.ui.tr('au_banned_load_error')} ({exc})", fg=RED)
+            return
+        self.status.config(text="> " + self.ui.tr("au_banned_loaded"), fg=GREEN)
+
+    def load_profiles(self) -> None:
+        if self.running:
+            return
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            self._profiles = profile_mod.load_profiles_file(path)
+        except (OSError, ValueError) as exc:
+            self.status.config(text=f"> {self.ui.tr('au_profiles_load_error')} ({exc})", fg=RED)
+            return
+        self.status.config(text="> " + self.ui.tr("au_profiles_loaded"), fg=GREEN)
+
+    def choose_compare_file(self) -> None:
+        if self.running:
+            return
+        if self._agg is None:
+            self.status.config(text=self.ui.tr("au_compare_need_first"), fg=RED)
+            return
+        path = filedialog.askopenfilename(
+            filetypes=[("Text / CSV / TSV", "*.txt *.lst *.csv *.tsv *.dic"), ("All files", "*.*")])
+        if path:
+            self.start(path, compare_only=True)
+
+    def export_remediation(self) -> None:
+        if not self._agg or not self._agg.get("worst_entries"):
+            self.status.config(text=self.ui.tr("au_no_remediation"), fg=RED)
+            return
+        pol = self._current_policy() or POLICY_PRESETS["strong"]
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv", initialfile="ciphercheck-remediation", filetypes=[("CSV", "*.csv")])
+        if not path:
+            return
+        try:
+            Path(path).write_text(report.remediation_csv(self._agg, pol), encoding="utf-8")
+        except OSError as exc:
+            self.status.config(text=f"> {exc}", fg=RED)
+            return
+        self.status.config(text="> " + self.ui.tr("st_report", path=path), fg=GREEN)
+
     def _sync_buttons(self) -> None:
         busy = self.running
         self.cancel_btn.config(state="normal" if busy else "disabled")
@@ -147,23 +216,29 @@ class AuditTab:
         self.policy_btn.config(state="disabled" if busy else "normal")
         self.load_policy_btn.config(state="disabled" if busy else "normal")
         self.gen_policy_btn.config(state="disabled" if busy or not self._current_policy() else "normal")
+        self.load_banned_btn.config(state="disabled" if busy else "normal")
+        self.load_profiles_btn.config(state="disabled" if busy else "normal")
+        self.compare_file_btn.config(state="disabled" if busy else "normal")
+        self.remediation_btn.config(state="disabled" if busy else "normal")
 
     # ----- running the audit (background thread keeps the window responsive) -----
     def choose_file(self) -> None:
         if self.running:
             return
         path = filedialog.askopenfilename(
-            filetypes=[("Text", "*.txt *.lst *.csv *.dic"), ("All files", "*.*")])
+            filetypes=[("Text / CSV / TSV", "*.txt *.lst *.csv *.tsv *.dic"), ("All files", "*.*")])
         if path:
             self.start(path)
 
-    def start(self, path: str) -> None:
-        """Audit `path` (from the file dialog or a dropped file)."""
+    def start(self, path: str, compare_only: bool = False) -> None:
+        """Audit `path` (from the file dialog or a dropped file). `compare_only` audits it
+        without replacing the currently shown statistics, just to compare it against them."""
         if self.running:
             return
         self._lines, self._fraction, self._result = 0, 0.0, None
         self._cancel = threading.Event()
-        self._thread = threading.Thread(target=self._worker, args=(path, self._cancel), daemon=True)
+        self._thread = threading.Thread(
+            target=self._worker, args=(path, self._cancel, compare_only), daemon=True)
         self._thread.start()
         self._sync_buttons()
         self._poll()
@@ -178,22 +253,23 @@ class AuditTab:
     def _on_progress(self, lines: int, fraction: float) -> None:
         self._lines, self._fraction = lines, fraction
 
-    def _worker(self, path: str, cancel: threading.Event) -> None:
+    def _worker(self, path: str, cancel: threading.Event, compare_only: bool) -> None:
         policy = self._current_policy()
         try:
-            agg = audit_file(path, progress=self._on_progress, cancel=cancel, policy=policy)
+            agg = audit_file(path, progress=self._on_progress, cancel=cancel, policy=policy,
+                             banned=self._banned_words, profiles=self._profiles)
         except NoPasswordColumn:
-            self._result = ("csv_error", None)
+            self._result = ("csv_error", None, compare_only)
             return
         except OSError:
-            self._result = ("error", None)
+            self._result = ("error", None, compare_only)
             return
         if agg is None:
-            self._result = ("cancelled", None)
+            self._result = ("cancelled", None, compare_only)
         elif agg["total"] == 0:
-            self._result = ("empty", None)
+            self._result = ("empty", None, compare_only)
         else:
-            self._result = ("done", agg)
+            self._result = ("done", agg, compare_only)
 
     def _poll(self) -> None:
         self._draw_progress(self._fraction if self._result is None else 0.0)
@@ -202,10 +278,20 @@ class AuditTab:
             self.status.config(text=self.ui.tr("au_working", n=f"{self._lines:,}", pct=pct), fg=GREEN)
             self.ui.root.after(POLL_MS, self._poll)
             return
-        kind, agg = self._result
+        # `compare_only` travels inside the (immutable, re-readable) result tuple itself,
+        # rather than as a separate flag, so handling the same finished result more than
+        # once - which cannot happen in the real app, but is how a couple of tests check a
+        # fast-finishing audit - stays safe: it always takes the same branch below.
+        kind, agg, compare_only = self._result
         if kind == "done":
             assert agg is not None  # only None for "error"/"cancelled"/"empty"/"csv_error"
-            compare_text = self._compare_text(agg)
+            if compare_only:
+                self.status.config(text="")
+                self.compare.config(text=self._compare_text(self._agg, agg))
+                self._sync_buttons()
+                self.render()
+                return
+            compare_text = self._compare_text(self._previous_agg, agg)
             self._previous_agg = agg
             self._agg = agg
             self.status.config(text="")
@@ -216,16 +302,16 @@ class AuditTab:
             key = {"error": "au_error", "empty": "au_empty", "cancelled": "au_cancelled",
                    "csv_error": "au_csv_nocolumn"}[kind]
             self.status.config(text=self.ui.tr(key), fg=RED if kind != "cancelled" else DIM)
-            if kind != "cancelled":
+            if kind != "cancelled" and not compare_only:
                 self._agg = None
         self._sync_buttons()
         self.render()
 
-    def _compare_text(self, agg: dict) -> str:
+    def _compare_text(self, old: dict | None, new: dict) -> str:
         ui = self.ui
-        if self._previous_agg is None:
+        if old is None:
             return ""
-        delta = report.compare_aggregates(self._previous_agg, agg)
+        delta = report.compare_aggregates(old, new)
         if delta["unchanged"]:
             return ui.tr("au_compare_same")
         bits, pct = delta["delta_average_bits"], delta["delta_weak_percent"]

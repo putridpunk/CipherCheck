@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Protocol, Sequence
 
 from . import __version__
+from . import policy as policy_mod
 from .analyzer import LABEL_ORDER, PATTERN_ADVICE, PATTERN_TEXT, Analysis
 from .i18n import t
 from .vulnerabilities import assess, risk_level
@@ -22,7 +23,7 @@ from .vulnerabilities import assess, risk_level
 BAR = "=" * 36
 TITLE = "PASSWORD SECURITY AUDITOR"
 # Priority order for picking the single most relevant reason to show for a "weakest entry".
-_KIND_PRIORITY = ("common_password", "breached", "personal", "word", "sequence",
+_KIND_PRIORITY = ("common_password", "breached", "personal", "banned", "word", "sequence",
                  "repeat_char", "repeat_block", "keyboard", "year")
 
 
@@ -212,6 +213,30 @@ def compare_aggregates(old: dict, new: dict) -> dict:
         "improved": new_weak < old_weak,
         "unchanged": new_weak == old_weak,
     }
+
+
+def compare_text(old: dict, new: dict) -> str:
+    """Plain-English summary of how `new` compares with `old` (for the CLI's --compare-with)."""
+    delta = compare_aggregates(old, new)
+    if delta["unchanged"]:
+        return "No meaningful change in the share of weak passwords."
+    verb = "Better" if delta["improved"] else "Worse"
+    bits, pct = delta["delta_average_bits"], delta["delta_weak_percent"]
+    return (f"{verb} than the file compared against: average strength "
+           f"{bits:+.1f} bits, weak passwords {pct:+.1f}%.")
+
+
+def remediation_csv(agg: dict, policy: policy_mod.Policy) -> str:
+    """CSV of the weakest labelled entries with a freshly generated, policy-compliant
+    replacement password for each - never the real one, and never derived from it."""
+    import io
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["account", "assessment", "suggested_new_password"])
+    for entry in agg.get("worst_entries", []):
+        w.writerow([entry["label"], entry["assessment"], policy_mod.generate_compliant(policy)])
+    return buf.getvalue()
 
 
 def aggregate_text(agg: dict) -> str:

@@ -7,13 +7,14 @@ import getpass
 import sys
 from pathlib import Path
 
-from . import __version__, hashes, history, report
+from . import __version__, banned, hashes, history, report
 from .analyzer import analyze
 from .audit import NoPasswordColumn, audit_file
 from .friendly import generate_passphrase
 from .i18n import LANGUAGES
 from .policy import PRESETS as POLICY_PRESETS
 from .policy import generate_compliant, load_file as load_policy_file
+from .profile import load_profiles_file
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile", metavar="TEXT",
                    help="personal information to flag if found in the password (your name, a "
                         "birth date, a pet's name, ...; comma-separated, kept only in memory)")
+    p.add_argument("--profiles-file", type=Path, metavar="PATH",
+                   help="batch mode: a JSON file mapping each account/site label (from the CSV's "
+                        "site/account column) to that one account's own personal terms")
+    p.add_argument("--banned-words-file", type=Path, metavar="PATH",
+                   help="flag these organisation-specific words/phrases (your company's name, "
+                        "products, ...; one per line) wherever they appear in a password")
     pol = p.add_mutually_exclusive_group()
     pol.add_argument("-P", "--policy", choices=sorted(POLICY_PRESETS), metavar="NAME",
                      help="batch mode: check each password against a named policy "
@@ -54,6 +61,13 @@ def build_parser() -> argparse.ArgumentParser:
     pol.add_argument("--policy-file", type=Path, metavar="PATH",
                      help="batch mode (or with --generate-for-policy): a custom policy as a small "
                           "JSON file (see README) instead of a named preset")
+    p.add_argument("--compare-with", type=Path, metavar="PATH", dest="compare_with",
+                   help="batch mode: audit this file too and report whether -f's file is "
+                        "better or worse (e.g. before/after a password reset)")
+    p.add_argument("--remediation", type=Path, metavar="PATH",
+                   help="batch mode: write a CSV with a freshly generated, policy-compliant "
+                        "replacement password for each weakest labelled entry (needs a CSV with "
+                        "a site/account column; uses -P/--policy-file, or 'strong' if neither is given)")
     p.add_argument("-r", "--report", type=Path, metavar="PATH", help="write a report to PATH")
     p.add_argument("--format", choices=sorted(set(report.RENDERERS) | set(report.AGG_RENDERERS)),
                    help="report format (default: from extension)")
@@ -75,8 +89,10 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
     show = sys.stderr.isatty() and not args.quiet
     try:
         policy = _resolve_policy(args)
+        banned_words = banned.load_file(args.banned_words_file) if args.banned_words_file else None
+        profiles = load_profiles_file(args.profiles_file) if args.profiles_file else None
     except (OSError, ValueError) as exc:
-        print(f"error: could not read the policy file: {exc}", file=sys.stderr)
+        print(f"error: {exc}", file=sys.stderr)
         return 2
 
     def progress(lines: int, fraction: float) -> None:
@@ -84,7 +100,8 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
             print(f"\rAnalysing... {lines:,} passwords ({100 * fraction:.0f}%)", end="", file=sys.stderr, flush=True)
 
     try:
-        agg = audit_file(path, workers=args.jobs, progress=progress, policy=policy)
+        agg = audit_file(path, workers=args.jobs, progress=progress, policy=policy,
+                         banned=banned_words, profiles=profiles)
     except NoPasswordColumn as exc:
         print(f"error: {path}: {exc}", file=sys.stderr)
         return 2
@@ -97,6 +114,31 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
     history.record(agg["total"], agg["average_estimated_bits"], report.weak_percent(agg))
     if not args.quiet:
         print(report.aggregate_friendly(agg, args.lang) if args.lang else report.aggregate_text(agg))
+    if args.compare_with:
+        try:
+            old_agg = audit_file(args.compare_with, workers=args.jobs, policy=policy,
+                                 banned=banned_words, profiles=profiles)
+        except NoPasswordColumn as exc:
+            print(f"error: {args.compare_with}: {exc}", file=sys.stderr)
+            return 2
+        except OSError as exc:
+            print(f"error: cannot read {args.compare_with}: {exc}", file=sys.stderr)
+            return 2
+        assert old_agg is not None
+        if not args.quiet:
+            print(report.compare_text(old_agg, agg))
+    if args.remediation:
+        if not agg.get("worst_entries"):
+            print("warning: no weak, labelled entries to list (the file needs a site/account "
+                  "column with at least one weak password); nothing written.", file=sys.stderr)
+        else:
+            rem_policy = policy or POLICY_PRESETS["strong"]
+            try:
+                args.remediation.write_text(report.remediation_csv(agg, rem_policy), encoding="utf-8")
+            except OSError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+            print(f"Remediation list written to {args.remediation}")
     if args.report:
         try:
             out = report.write_aggregate(agg, args.report, args.format, args.lang)
@@ -162,6 +204,14 @@ def main(argv: list[str] | None = None) -> int:
         return _batch(args.file, args)
 
     profile = [t for t in args.profile.split(",") if t.strip()] if args.profile else None
+    if args.banned_words_file:
+        try:
+            banned_words = banned.load_file(args.banned_words_file)
+        except OSError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+    else:
+        banned_words = None
 
     if args.password is not None:
         print("warning: passwords passed on the command line may be stored in shell history.",
@@ -176,7 +226,7 @@ def main(argv: list[str] | None = None) -> int:
             print(file=sys.stderr)
             return 130
 
-    result = analyze(password, profile=profile)
+    result = analyze(password, profile=profile, banned=banned_words)
     if not args.quiet:
         print(report.to_friendly_text(result, args.lang) if args.lang else report.to_text(result))
     if args.report:

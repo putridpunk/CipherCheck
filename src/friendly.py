@@ -24,10 +24,10 @@ LEVELS = {
     "STRONG": (4, "#00ff41"),
     "VERY STRONG": (5, "#7dffb0"),
 }
-PROBLEM_KINDS = ("common_password", "breached", "personal", "word", "sequence", "repeat_char",
-                 "repeat_block", "keyboard", "year")
-KEY = {"common_password": "common", "breached": "breached", "personal": "personal", "word": "word",
-       "sequence": "sequence", "repeat_char": "repeat_char", "repeat_block": "repeat_block",
+PROBLEM_KINDS = ("common_password", "breached", "personal", "banned", "word", "sequence",
+                 "repeat_char", "repeat_block", "keyboard", "year")
+KEY = {"common_password": "common", "breached": "breached", "personal": "personal", "banned": "banned",
+       "word": "word", "sequence": "sequence", "repeat_char": "repeat_char", "repeat_block": "repeat_block",
        "keyboard": "keyboard", "year": "year"}
 
 

@@ -195,7 +195,7 @@ class GuiSmokeTests(unittest.TestCase):
                 break
             time.sleep(0.05)
         tab._poll()
-        self.assertEqual(tab._result, ("error", None))
+        self.assertEqual(tab._result, ("error", None, False))
         tab.clear()  # nothing running: just forgets statistics
 
 

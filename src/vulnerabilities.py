@@ -47,6 +47,12 @@ def assess(a: Analysis) -> list[Vulnerability]:
             "Names, dates and other facts about you are the first thing someone who knows you, "
             "or can find you online, will try; they are not secret, whatever their length.",
             "Never build a password from your own name, birth date, pet or similar facts."))
+    if "banned" in kinds:
+        out.append(Vulnerability(
+            "Personal information", "critical", "Contains an organization-banned word",
+            "Your organization's name or products are the first thing an attacker who knows "
+            "where you work will try; they are not secret, whatever their length.",
+            "Never build a password from your organization's name or products."))
     if a.length < 8:
         out.append(Vulnerability(
             "Length", "high", "Password is very short",

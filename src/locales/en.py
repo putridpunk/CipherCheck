@@ -107,6 +107,8 @@ STRINGS = {
     "profile_prompt": "Optional: your name, birth date, pet, etc. (comma-separated) — checked here only, never saved",
     "p_personal": "It contains information about you (a name, a date, ...), which anyone who knows you can guess.",
     "t_personal": "Never build a password from facts about yourself, however well hidden.",
+    "p_banned": "It contains a word your organization has banned (its name, a product, ...).",
+    "t_banned": "Never build a password from your organization's name or products.",
     "hash_crack_warning": "Educational demo only: this can only find one of the 100,000 common test "
                           "passwords below, never a real, unique or salted password. Never paste a hash "
                           "from a real account.",
@@ -142,4 +144,14 @@ STRINGS = {
     "au_trend": "Average strength over your last {n} audits: {values} bits",
     "au_clear_history_btn": "CLEAR HISTORY",
     "au_history_cleared": "History cleared.",
+    "au_load_banned": "LOAD BANNED WORDS...",
+    "au_banned_loaded": "Banned-word list loaded.",
+    "au_banned_load_error": "Couldn't load that banned-word list.",
+    "au_load_profiles": "LOAD PROFILES FILE...",
+    "au_profiles_loaded": "Account profiles loaded.",
+    "au_profiles_load_error": "Couldn't load that profiles file.",
+    "au_compare_file_btn": "COMPARE WITH FILE...",
+    "au_compare_need_first": "Run an audit first, then compare another file against it.",
+    "au_remediation_btn": "EXPORT REMEDIATION LIST",
+    "au_no_remediation": "No weak, labelled entries to list (load a CSV with a site/account column).",
 }

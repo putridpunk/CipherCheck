@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Semicolon and tab-separated CSV/TSV import:** the Audit tab and `-f` now also recognise `;`- and tab-separated exports (common from European spreadsheets and some password managers), not only comma-separated ones; a `.tsv` file is always read as tab-separated.
+- **Banned words:** a *Load banned words* button (and `--banned-words-file`) flags your organisation's own terms (its name, products, ...) wherever they appear in a password, in both the Analyze tab/single-password CLI and the Audit tab/batch CLI.
+- **Per-account profiles:** a *Load profiles file* button (and `--profiles-file`) accepts a JSON file mapping each account/site label to that one account's own personal terms, so a batch audit can flag "this account's password contains its own owner's name", not just a flat, organisation-wide list.
+- **Compare with another file:** a *Compare with file* button (and `--compare-with`) audits a second file and reports whether it is better or worse than the one currently loaded - handy for checking a password reset actually helped - without replacing what is shown.
+- **Remediation list:** an *Export remediation list* button (and `--remediation`) writes a CSV with a freshly generated, policy-compliant replacement password for each weakest labelled entry - never the real password, and never derived from it.
+
 ## [0.8.0] - 2026-11-27
 
 ### Added

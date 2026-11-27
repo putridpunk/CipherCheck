@@ -3,11 +3,15 @@
 Large files are read in chunks of lines; each chunk is analysed in a worker process and
 only counters come back, so memory stays small and no password is kept or returned.
 
-A `.csv` file (e.g. a password manager export) is read as CSV: the header row is used to
-find a column that looks like it holds passwords, and only that column is read. If the
-header also has a column that looks like a site/account name, that (never the password
-itself) is kept alongside the weakest entries and alongside groups of accounts that share
-a password, so the dashboard can say *which* accounts to fix, not just how many.
+A `.csv`/`.tsv` file (e.g. a password manager export) is read as delimited text: comma,
+semicolon and tab are all recognised (many European spreadsheets export with `;`, and
+some managers export tab-separated). The header row is used to find a column that looks
+like it holds passwords, and only that column is read. If the header also has a column
+that looks like a site/account name, that (never the password itself) is kept alongside
+the weakest entries and alongside groups of accounts that share a password, so the
+dashboard can say *which* accounts to fix, not just how many; it is also used, if a
+per-account profiles file was given, to flag a password built from that one account's
+own personal information.
 """
 
 from __future__ import annotations
@@ -31,6 +35,7 @@ MAX_WORKERS = 8
 SMALL_FILE_BYTES = 256 * 1024  # below this, starting worker processes costs more than it saves
 MAX_LABEL_LENGTH = 80
 MAX_WORST_ENTRIES = 15
+DELIMITED_SUFFIXES = (".csv", ".tsv")
 # Only these are worth flagging as "fix this first"; STRONG/VERY STRONG never are.
 WORST_LABELS = ("VERY WEAK", "WEAK", "MODERATE")
 _WORST_ORDER = {lbl: i for i, lbl in enumerate(WORST_LABELS)}
@@ -41,10 +46,11 @@ LABEL_HEADERS = ("name", "site", "url", "login_uri", "title", "hostname", "domai
 
 # progress(lines_done, fraction_of_file_read)
 Progress = Callable[[int, float], None]
+Profiles = dict[str, list[str]]  # account/site label -> that account's own personal terms
 
 
 class NoPasswordColumn(ValueError):
-    """Raised when a .csv file has no column that looks like it holds passwords."""
+    """Raised when a .csv/.tsv file has no column that looks like it holds passwords."""
 
 
 @dataclass(frozen=True)
@@ -111,14 +117,16 @@ def _empty_stats() -> ChunkStats:
     return ChunkStats(0, Counter(), Counter(), 0.0, 0, ReuseTracker(), WorstTracker())
 
 
-def analyze_chunk(lines: list[tuple[bytes, str | None]], policy: policy_mod.Policy | None = None) -> ChunkStats:
+def analyze_chunk(lines: list[tuple[bytes, str | None]], policy: policy_mod.Policy | None = None,
+                  banned: list[str] | None = None, profiles: Profiles | None = None) -> ChunkStats:
     """Analyse raw (password line, optional label) pairs. Module-level so workers can import it."""
     stats = _empty_stats()
     for raw, label in lines:
         pw = raw.rstrip(b"\r\n").decode("utf-8", "replace")
         if not pw:
             continue
-        a = analyze(pw)
+        own_profile = profiles.get(label) if profiles and label else None
+        a = analyze(pw, profile=own_profile, banned=banned)
         stats.n += 1
         stats.labels[a.label] += 1
         stats.kinds.update(a.pattern_kinds)
@@ -160,20 +168,33 @@ def _label_column(header: list[str], password_col: int) -> int | None:
     return col if col is not None and col != password_col else None
 
 
-def _csv_columns(path: Path) -> tuple[int, int | None]:
+def _dialect(path: Path) -> type[csv.Dialect] | csv.Dialect:
+    """Comma, semicolon or tab, detected from the file itself (`.tsv` is always tab)."""
+    if path.suffix.lower() == ".tsv":
+        return csv.excel_tab
+    with path.open("r", encoding="utf-8-sig", newline="") as fh:
+        sample = fh.read(4096)
+    try:
+        return csv.Sniffer().sniff(sample, delimiters=",;\t")
+    except csv.Error:
+        return csv.excel  # comma: the common default, and a reasonable fallback
+
+
+def _csv_columns(path: Path, dialect: type[csv.Dialect] | csv.Dialect) -> tuple[int, int | None]:
     with path.open("r", encoding="utf-8-sig", newline="") as fh:
         try:
-            header = next(csv.reader(fh))
+            header = next(csv.reader(fh, dialect))
         except StopIteration:
-            raise NoPasswordColumn("the CSV file is empty") from None
+            raise NoPasswordColumn("the file is empty") from None
         col = _password_column(header)
         if col is None:
-            raise NoPasswordColumn("no password-like column found in the CSV header")
+            raise NoPasswordColumn("no password-like column found in the header")
         return col, _label_column(header, col)
 
 
-def _csv_lines(path: Path, col: int, label_col: int | None) -> Iterator[tuple[bytes, str | None, int]]:
-    """Yield (password line, label, bytes consumed so far) for one CSV column.
+def _csv_lines(path: Path, col: int, label_col: int | None,
+               dialect: type[csv.Dialect] | csv.Dialect) -> Iterator[tuple[bytes, str | None, int]]:
+    """Yield (password line, label, bytes consumed so far) for one column.
 
     `fh.tell()` cannot be used here (Python disallows it once a text file has been
     iterated), so progress is an estimate based on each row's own size; it is clamped
@@ -181,7 +202,7 @@ def _csv_lines(path: Path, col: int, label_col: int | None) -> Iterator[tuple[by
     """
     consumed = 0
     with path.open("r", encoding="utf-8-sig", newline="") as fh:
-        reader = csv.reader(fh)
+        reader = csv.reader(fh, dialect)
         next(reader, None)  # header, already used to pick the columns
         for row in reader:
             consumed += len(",".join(row).encode("utf-8", "replace")) + 2
@@ -198,9 +219,14 @@ def _raw_lines(path: Path) -> Iterator[tuple[bytes, None, int]]:
             yield line, None, done
 
 
-def _chunks(path: Path, chunk_lines: int, csv_cols: tuple[int, int | None] | None):
+def _chunks(path: Path, chunk_lines: int, csv_cols: tuple[int, int | None] | None,
+           dialect: type[csv.Dialect] | csv.Dialect | None):
     """Yield (lines, bytes_consumed_so_far); each line is (password_bytes, label_or_none)."""
-    source = _csv_lines(path, *csv_cols) if csv_cols is not None else _raw_lines(path)
+    if csv_cols is not None:
+        assert dialect is not None  # always given together with csv_cols
+        source = _csv_lines(path, *csv_cols, dialect)
+    else:
+        source = _raw_lines(path)
     batch: list[tuple[bytes, str | None]] = []
     consumed = 0
     for line, label, done in source:
@@ -219,18 +245,26 @@ def default_workers() -> int:
 
 def audit_file(path: str | Path, *, workers: int | None = None, progress: Progress | None = None,
                cancel: threading.Event | None = None, chunk_lines: int = CHUNK_LINES,
-               policy: policy_mod.Policy | None = None) -> dict | None:
-    """Aggregate statistics for one-password-per-line `path`, or a `.csv` export (the
+               policy: policy_mod.Policy | None = None, banned: list[str] | None = None,
+               profiles: Profiles | None = None) -> dict | None:
+    """Aggregate statistics for one-password-per-line `path`, or a `.csv`/`.tsv` export (the
     password column is detected from the header; raises NoPasswordColumn if none is found).
-    A site/account-name column, if found, is used only to name the weakest entries and
-    accounts that share a password - the password itself is never kept or returned.
+    A site/account-name column, if found, is used only to name the weakest entries, accounts
+    that share a password, and (with `profiles`) which account's own information a password
+    contains - the password itself is never kept or returned.
+
+    `banned` flags organisation-specific terms (e.g. its name) in every password; `profiles`
+    maps an account/site label to that one account's own personal terms (name, birth date,
+    ...), checked only against that account's password.
 
     Returns the aggregate dict (see report.aggregate_counts), or None when `cancel` was set.
     Raises OSError if the file cannot be read. `workers=1` stays in this process.
     """
     path = Path(path)
     size = max(path.stat().st_size, 1)
-    csv_cols = _csv_columns(path) if path.suffix.lower() == ".csv" else None
+    is_delimited = path.suffix.lower() in DELIMITED_SUFFIXES
+    dialect = _dialect(path) if is_delimited else None
+    csv_cols = _csv_columns(path, dialect) if dialect is not None else None
     if workers is None:
         workers = 1 if size < SMALL_FILE_BYTES else default_workers()
     total = _empty_stats()
@@ -240,10 +274,10 @@ def audit_file(path: str | Path, *, workers: int | None = None, progress: Progre
             progress(total.n, min(consumed / size, 1.0))
 
     if workers <= 1:
-        for lines, consumed in _chunks(path, chunk_lines, csv_cols):
+        for lines, consumed in _chunks(path, chunk_lines, csv_cols, dialect):
             if cancel and cancel.is_set():
                 return None
-            total.merge(analyze_chunk(lines, policy))
+            total.merge(analyze_chunk(lines, policy, banned, profiles))
             report_progress(consumed)
     else:
         pending: dict[Future, int] = {}
@@ -260,10 +294,10 @@ def audit_file(path: str | Path, *, workers: int | None = None, progress: Progre
                     report_progress(consumed)
                 return not (cancel and cancel.is_set())
 
-            for lines, consumed in _chunks(path, chunk_lines, csv_cols):
+            for lines, consumed in _chunks(path, chunk_lines, csv_cols, dialect):
                 if cancel and cancel.is_set():
                     break
-                pending[pool.submit(analyze_chunk, lines, policy)] = consumed
+                pending[pool.submit(analyze_chunk, lines, policy, banned, profiles)] = consumed
                 while len(pending) >= workers * 2:  # keep memory bounded
                     if not collect(block=True):
                         break

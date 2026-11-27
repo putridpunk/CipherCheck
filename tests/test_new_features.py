@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from src import crack_demo, patterns, policy, profile, report, update_check
+from src import crack_demo, history, patterns, policy, profile, report, update_check
 from src.analyzer import analyze
 from src.audit import NoPasswordColumn, audit_file
 from src.entropy import crack_time
@@ -69,6 +69,174 @@ class PolicyTests(unittest.TestCase):
     def test_too_short_reason(self):
         result = policy.evaluate(analyze("ab1"), policy.PRESETS["basic"])
         self.assertIn("too_short", result.reasons)
+
+
+class CustomPolicyTests(unittest.TestCase):
+    def test_from_dict_defaults_and_overrides(self):
+        pol = policy.from_dict({"min_length": 20, "min_bits": 70, "forbid_common": False})
+        self.assertEqual(pol.min_length, 20)
+        self.assertEqual(pol.min_bits, 70.0)
+        self.assertFalse(pol.forbid_common)
+        self.assertTrue(pol.forbid_breached)  # default kept
+
+    def test_load_file_roundtrip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            path.write_text(json.dumps({"key": "internal", "min_length": 16, "min_bits": 55}),
+                            encoding="utf-8")
+            pol = policy.load_file(path)
+            self.assertEqual((pol.key, pol.min_length, pol.min_bits), ("internal", 16, 55.0))
+
+    def test_load_file_rejects_non_object(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            path.write_text("[1, 2, 3]", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                policy.load_file(path)
+
+    def test_load_file_missing(self):
+        with self.assertRaises(OSError):
+            policy.load_file("/no/such/policy.json")
+
+    def test_generate_compliant_satisfies_preset_policies(self):
+        for pol in policy.PRESETS.values():
+            pw = policy.generate_compliant(pol)
+            self.assertTrue(policy.evaluate(analyze(pw), pol).passed, pol)
+
+    def test_generate_compliant_satisfies_strict_custom_policy(self):
+        pol = policy.from_dict({"min_length": 24, "min_bits": 90})
+        pw = policy.generate_compliant(pol)
+        self.assertTrue(policy.evaluate(analyze(pw), pol).passed)
+        self.assertGreaterEqual(len(pw), 24)
+
+    def test_cli_policy_file_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pw_path = Path(tmp) / "pw.txt"
+            pw_path.write_text("password\nT7#mQ9!vLp2xK4\n", encoding="utf-8")
+            pol_path = Path(tmp) / "policy.json"
+            pol_path.write_text(json.dumps({"min_length": 10, "min_bits": 30}), encoding="utf-8")
+            self.assertEqual(main(["-f", str(pw_path), "--policy-file", str(pol_path), "-q"]), 0)
+
+    def test_cli_generate_for_policy(self):
+        self.assertEqual(main(["--generate-for-policy", "strong"]), 0)
+
+    def test_cli_generate_for_policy_with_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pol_path = Path(tmp) / "policy.json"
+            pol_path.write_text(json.dumps({"min_length": 18, "min_bits": 60}), encoding="utf-8")
+            self.assertEqual(main(["--generate-for-policy", "x", "--policy-file", str(pol_path)]), 0)
+
+    def test_cli_generate_for_policy_unknown_name(self):
+        self.assertEqual(main(["--generate-for-policy", "nope"]), 2)
+
+
+class WeakestEntriesTests(unittest.TestCase):
+    def test_friendly_aggregate_includes_worst_and_shared_in_every_language(self):
+        from src.i18n import LANGUAGES
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "export.csv"
+            path.write_text(
+                "site,password\nexample.com,password\nexample.org,password\n", encoding="utf-8")
+            agg = audit_file(path, workers=1)
+        for lang in LANGUAGES:
+            out = report.aggregate_friendly(agg, lang)
+            self.assertIn("example.com", out)
+            self.assertIn("example.org", out)
+
+    def test_worst_entries_and_shared_accounts_from_csv_labels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "export.csv"
+            path.write_text(
+                "site,username,password\n"
+                "example.com,bob,password\n"
+                "example.org,bob,password\n"
+                "bank.com,bob,T7#mQ9!vLp2xK4\n",
+                encoding="utf-8")
+            agg = audit_file(path, workers=1)
+        labels = {e["label"] for e in agg["worst_entries"]}
+        self.assertEqual(labels, {"example.com", "example.org"})
+        shared = agg["reuse"]["shared_accounts"]
+        self.assertEqual(len(shared), 1)
+        self.assertEqual(set(shared[0]["labels"]), {"example.com", "example.org"})
+        self.assertEqual(shared[0]["count"], 2)
+
+    def test_no_label_column_means_no_worst_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pw.txt"
+            path.write_text("password\nT7#mQ9!vLp2xK4\n", encoding="utf-8")
+            agg = audit_file(path, workers=1)
+        self.assertEqual(agg["worst_entries"], [])
+        self.assertEqual(agg["reuse"]["shared_accounts"], [])
+
+    def test_worst_entries_never_include_strong_passwords(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "export.csv"
+            path.write_text("site,password\nbank.com,T7#mQ9!vLp2xK4\n", encoding="utf-8")
+            agg = audit_file(path, workers=1)
+        self.assertEqual(agg["worst_entries"], [])
+
+    def test_worst_entries_bounded_and_rendered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "export.csv"
+            rows = [f"site{i}.com,password" for i in range(50)]
+            path.write_text("site,password\n" + "\n".join(rows) + "\n", encoding="utf-8")
+            agg = audit_file(path, workers=1)
+        from src.audit import MAX_WORST_ENTRIES
+        self.assertLessEqual(len(agg["worst_entries"]), MAX_WORST_ENTRIES)
+        for ext in ("txt", "json", "html", "csv"):
+            with tempfile.TemporaryDirectory() as tmp:
+                out = report.write_aggregate(agg, Path(tmp) / f"a.{ext}").read_text(encoding="utf-8")
+                self.assertTrue(out)
+
+
+class AuditHistoryTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        os.environ["CIPHERCHECK_CONFIG_DIR"] = self._tmp.name
+
+    def tearDown(self):
+        os.environ.pop("CIPHERCHECK_CONFIG_DIR", None)
+        self._tmp.cleanup()
+
+    def test_record_and_load_roundtrip(self):
+        self.assertEqual(history.load(), [])
+        history.record(10, 42.5, 20.0)
+        hist = history.load()
+        self.assertEqual(len(hist), 1)
+        self.assertEqual(hist[0]["total"], 10)
+        self.assertEqual(hist[0]["average_bits"], 42.5)
+        self.assertEqual(hist[0]["weak_percent"], 20.0)
+        self.assertIn("at", hist[0])
+
+    def test_bounded_to_max_entries(self):
+        for i in range(history.MAX_ENTRIES + 10):
+            history.record(1, float(i), 0.0)
+        hist = history.load()
+        self.assertEqual(len(hist), history.MAX_ENTRIES)
+        self.assertEqual(hist[-1]["average_bits"], float(history.MAX_ENTRIES + 9))
+
+    def test_zero_total_not_recorded(self):
+        history.record(0, 0.0, 0.0)
+        self.assertEqual(history.load(), [])
+
+    def test_clear(self):
+        history.record(5, 30.0, 10.0)
+        self.assertTrue(history.load())
+        history.clear()
+        self.assertEqual(history.load(), [])
+
+    def test_corrupted_file_returns_empty(self):
+        from src.history import _file
+        _file().parent.mkdir(parents=True, exist_ok=True)
+        _file().write_text("{not json", encoding="utf-8")
+        self.assertEqual(history.load(), [])
+
+    def test_cli_records_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pw.txt"
+            path.write_text("password\nT7#mQ9!vLp2xK4\n", encoding="utf-8")
+            self.assertEqual(main(["-f", str(path), "-q"]), 0)
+        self.assertEqual(len(history.load()), 1)
 
 
 class CsvAuditTests(unittest.TestCase):
@@ -251,14 +419,14 @@ class GuiNewFeatureTests(unittest.TestCase):
         self.assertTrue(text.strip())
 
     def test_policy_button_cycles(self):
+        from src.gui.audit_tab import POLICY_KEYS
         tab = self.app.tabs["audit"]
         first = tab.policy_btn.cget("text")
         tab.cycle_policy()
         self.assertNotEqual(tab.policy_btn.cget("text"), first)
-        tab.cycle_policy()
-        tab.cycle_policy()
-        tab.cycle_policy()
-        self.assertEqual(tab.policy_btn.cget("text"), first)  # back to "none" after 4 cycles
+        for _ in range(len(POLICY_KEYS) - 1):
+            tab.cycle_policy()
+        self.assertEqual(tab.policy_btn.cget("text"), first)  # back to "none" after a full cycle
 
     def test_hash_crack_button_finds_common_password(self):
         tab = self.app.tabs["hash"]
@@ -307,6 +475,56 @@ class GuiNewFeatureTests(unittest.TestCase):
                 time.sleep(0.05)
         self.assertFalse(self.app._update_checking)
         self.assertEqual(self.app.update_status.cget("text"), self.app.ui.tr("upd_latest"))
+
+    def test_load_policy_file_button(self):
+        tab = self.app.tabs["audit"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            path.write_text(json.dumps({"min_length": 10, "min_bits": 20}), encoding="utf-8")
+            with mock.patch("tkinter.filedialog.askopenfilename", return_value=str(path)):
+                tab.load_policy_file()
+        self.assertIsNotNone(tab._custom_policy)
+        from src.gui.audit_tab import POLICY_KEYS
+        self.assertEqual(POLICY_KEYS[tab._policy_i], "custom")
+        self.assertEqual(str(tab.gen_policy_btn["state"]), "normal")
+
+    def test_load_policy_file_bad_json_shows_error(self):
+        tab = self.app.tabs["audit"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "policy.json"
+            path.write_text("not json", encoding="utf-8")
+            with mock.patch("tkinter.filedialog.askopenfilename", return_value=str(path)):
+                tab.load_policy_file()
+        self.assertIsNone(tab._custom_policy)
+        from src.gui.theme import RED
+        self.assertEqual(tab.status.cget("fg"), RED)
+
+    def test_generate_for_policy_copies_to_clipboard(self):
+        tab = self.app.tabs["audit"]
+        tab.cycle_policy()  # none -> basic
+        self.assertEqual(str(tab.gen_policy_btn["state"]), "normal")
+        tab.generate_for_policy()
+        self.root.update()
+        pw = self.root.clipboard_get()
+        self.assertTrue(pw)
+        from src.analyzer import analyze
+        from src.policy import PRESETS, evaluate
+        self.assertTrue(evaluate(analyze(pw), PRESETS["basic"]).passed)
+
+    def test_generate_for_policy_disabled_when_no_policy(self):
+        tab = self.app.tabs["audit"]
+        self.assertEqual(str(tab.gen_policy_btn["state"]), "disabled")
+
+    def test_trend_shown_after_second_audit(self):
+        tab = self.app.tabs["audit"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pw.txt"
+            path.write_text("password\nT7#mQ9!vLp2xK4\n", encoding="utf-8")
+            for _ in range(2):
+                tab.start(str(path))
+                tab._thread.join(timeout=5)
+                tab._poll()
+        self.assertIn("→", tab.compare.cget("text"))
 
 
 if __name__ == "__main__":

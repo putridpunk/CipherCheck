@@ -5,6 +5,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Fix these first:** when the Audit tab (or `-f`) reads a CSV with a site/account column, the dashboard now names the weakest entries by that account (never the password), so you know which to change first.
+- **Accounts that share a password:** when the same password appears under more than one account in that CSV, the accounts involved are now listed.
+- **Custom policies:** a *Load policy file* button in the Audit tab (and `--policy-file` on the CLI) loads a small JSON file with your own `min_length`/`min_bits`/`forbid_common`/`forbid_breached`, instead of only the `basic`/`nist`/`strong` presets.
+- **Generate for policy:** a button (and `--generate-for-policy`) creates a fresh password guaranteed to satisfy the currently selected policy.
+- **Audit history:** the Audit tab now remembers the last 30 audits' aggregate numbers (total, average strength, share of weak passwords - never a password, filename or account name) and shows a short trend line once you have run more than one.
+
 ## [0.7.0] - 2026-11-25
 
 ### Added

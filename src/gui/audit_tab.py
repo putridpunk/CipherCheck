@@ -7,7 +7,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
 
-from .. import report
+from .. import history, report
+from .. import policy as policy_mod
 from ..analyzer import LABEL_ORDER
 from ..audit import NoPasswordColumn, audit_file
 from ..friendly import KEY as KIND_KEY
@@ -17,7 +18,8 @@ from .theme import DARKER, DIM, GREEN, PANEL, RED
 from .widgets import UI
 
 POLL_MS = 120
-POLICY_KEYS = ["none", "basic", "nist", "strong"]
+CLIPBOARD_WIPE_MS = 30_000
+POLICY_KEYS = ["none", "basic", "nist", "strong", "custom"]
 
 
 class AuditTab:
@@ -31,6 +33,7 @@ class AuditTab:
         self._thread: threading.Thread | None = None
         self._cancel = threading.Event()
         self._policy_i = 0  # index into POLICY_KEYS; "none" by default
+        self._custom_policy: policy_mod.Policy | None = None
         self._previous_agg: dict | None = None
 
         self.intro = ui.label(page, size=10, color=DIM, wraplength=600, justify="center")
@@ -42,7 +45,11 @@ class AuditTab:
         self.choose_btn = buttons.button(self.choose_file)
         self.cancel_btn = buttons.button(self.cancel)
         self.save_btn = buttons.button(self.save_report)
-        self.policy_btn = buttons.button(self.cycle_policy)
+        policy_row = ui.button_row(page)
+        policy_row.frame.pack()
+        self.policy_btn = policy_row.button(self.cycle_policy)
+        self.load_policy_btn = policy_row.button(self.load_policy_file)
+        self.gen_policy_btn = policy_row.button(self.generate_for_policy)
         self.status = ui.label(page, size=10, wraplength=600)
         self.status.pack(pady=(8, 0))
         self.compare = ui.label(page, size=9, color=DIM, wraplength=600, justify="center")
@@ -79,13 +86,20 @@ class AuditTab:
         self.choose_btn.config(text=ui.tr("au_choose"))
         self.cancel_btn.config(text=ui.tr("au_cancel"))
         self.save_btn.config(text=ui.tr("save_report"))
+        self.load_policy_btn.config(text=ui.tr("au_load_policy"))
+        self.gen_policy_btn.config(text=ui.tr("au_gen_policy_btn"))
         self._update_policy_btn()
         self._sync_buttons()
         self.render()
 
+    def _current_policy(self) -> policy_mod.Policy | None:
+        key = POLICY_KEYS[self._policy_i]
+        return self._custom_policy if key == "custom" else POLICY_PRESETS.get(key)
+
     def _update_policy_btn(self) -> None:
         key = POLICY_KEYS[self._policy_i]
         self.policy_btn.config(text=self.ui.tr("au_policy_btn", name=self.ui.tr(f"au_policy_{key}")))
+        self.gen_policy_btn.config(state="normal" if self._current_policy() else "disabled")
 
     def cycle_policy(self) -> None:
         if self.running:
@@ -93,11 +107,46 @@ class AuditTab:
         self._policy_i = (self._policy_i + 1) % len(POLICY_KEYS)
         self._update_policy_btn()
 
+    def load_policy_file(self) -> None:
+        if self.running:
+            return
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            self._custom_policy = policy_mod.load_file(path)
+        except (OSError, ValueError) as exc:
+            self.status.config(text=f"> {self.ui.tr('au_policy_load_error')} ({exc})", fg=RED)
+            return
+        self._policy_i = POLICY_KEYS.index("custom")
+        self._update_policy_btn()
+        self.status.config(text="> " + self.ui.tr("au_policy_loaded"), fg=GREEN)
+
+    def generate_for_policy(self) -> None:
+        pol = self._current_policy()
+        if pol is None:
+            return
+        pw = policy_mod.generate_compliant(pol)
+        root = self.ui.root
+        root.clipboard_clear()
+        root.clipboard_append(pw)
+        self.status.config(text="> " + self.ui.tr("au_policy_generated"), fg=GREEN)
+
+        def wipe() -> None:
+            try:
+                if root.clipboard_get() == pw:
+                    root.clipboard_clear()
+            except tk.TclError:
+                pass
+        root.after(CLIPBOARD_WIPE_MS, wipe)
+
     def _sync_buttons(self) -> None:
         busy = self.running
         self.cancel_btn.config(state="normal" if busy else "disabled")
         self.choose_btn.config(state="disabled" if busy else "normal")
         self.policy_btn.config(state="disabled" if busy else "normal")
+        self.load_policy_btn.config(state="disabled" if busy else "normal")
+        self.gen_policy_btn.config(state="disabled" if busy or not self._current_policy() else "normal")
 
     # ----- running the audit (background thread keeps the window responsive) -----
     def choose_file(self) -> None:
@@ -130,8 +179,7 @@ class AuditTab:
         self._lines, self._fraction = lines, fraction
 
     def _worker(self, path: str, cancel: threading.Event) -> None:
-        key = POLICY_KEYS[self._policy_i]
-        policy = POLICY_PRESETS.get(key)
+        policy = self._current_policy()
         try:
             agg = audit_file(path, progress=self._on_progress, cancel=cancel, policy=policy)
         except NoPasswordColumn:
@@ -157,10 +205,13 @@ class AuditTab:
         kind, agg = self._result
         if kind == "done":
             assert agg is not None  # only None for "error"/"cancelled"/"empty"/"csv_error"
-            self._compare_with_previous(agg)
+            compare_text = self._compare_text(agg)
             self._previous_agg = agg
             self._agg = agg
             self.status.config(text="")
+            hist = history.record(agg["total"], agg["average_estimated_bits"], report.weak_percent(agg))
+            trend_text = self._trend_text(hist)
+            self.compare.config(text="\n".join(t for t in (compare_text, trend_text) if t))
         else:
             key = {"error": "au_error", "empty": "au_empty", "cancelled": "au_cancelled",
                    "csv_error": "au_csv_nocolumn"}[kind]
@@ -170,19 +221,23 @@ class AuditTab:
         self._sync_buttons()
         self.render()
 
-    def _compare_with_previous(self, agg: dict) -> None:
+    def _compare_text(self, agg: dict) -> str:
         ui = self.ui
         if self._previous_agg is None:
-            self.compare.config(text="")
-            return
+            return ""
         delta = report.compare_aggregates(self._previous_agg, agg)
         if delta["unchanged"]:
-            self.compare.config(text=ui.tr("au_compare_same"))
-            return
-        bits = delta["delta_average_bits"]
-        pct = delta["delta_weak_percent"]
+            return ui.tr("au_compare_same")
+        bits, pct = delta["delta_average_bits"], delta["delta_weak_percent"]
         key = "au_compare_better" if delta["improved"] else "au_compare_worse"
-        self.compare.config(text=ui.tr(key, bits=f"{abs(bits):.1f}", pct=f"{abs(pct):.1f}"))
+        return ui.tr(key, bits=f"{abs(bits):.1f}", pct=f"{abs(pct):.1f}")
+
+    def _trend_text(self, hist: list[dict]) -> str:
+        recent = hist[-6:]
+        if len(recent) < 2:
+            return ""
+        values = " → ".join(f"{h['average_bits']:.0f}" for h in recent)
+        return self.ui.tr("au_trend", n=len(recent), values=values)
 
     def stop_for_close(self) -> None:
         """Called when the window is closing: stop the audit and give its workers a moment."""
@@ -247,6 +302,18 @@ class AuditTab:
             lines.append(("head", ui.tr("au_issues")))
             for kind, n in agg["pattern_counts"].items():
                 lines.append(("bad", f" [-] {100 * n / total:.0f}%  {ui.tr('p_' + KIND_KEY[kind])}"))
+        shared = reuse.get("shared_accounts", [])
+        if shared:
+            lines.append(("head", ui.tr("au_shared")))
+            for g in shared:
+                lines.append(("bad", " [-] " + " / ".join(g["labels"])))
+        worst = agg.get("worst_entries", [])
+        if worst:
+            lines.append(("head", ui.tr("au_fix_first")))
+            for w in worst:
+                kinds = [k for k in w["kinds"] if k in KIND_KEY]
+                reason = ui.tr("p_" + KIND_KEY[kinds[0]]) if kinds else ""
+                lines.append(("bad", f" [-] {w['label']}: {reason}"))
         pol = agg.get("policy")
         if pol:
             lines.append(("head", ui.tr("au_policy_result", name=ui.tr(f"au_policy_{pol['key']}"),

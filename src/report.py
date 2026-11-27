@@ -21,6 +21,16 @@ from .vulnerabilities import assess, risk_level
 
 BAR = "=" * 36
 TITLE = "PASSWORD SECURITY AUDITOR"
+# Priority order for picking the single most relevant reason to show for a "weakest entry".
+_KIND_PRIORITY = ("common_password", "breached", "personal", "word", "sequence",
+                 "repeat_char", "repeat_block", "keyboard", "year")
+
+
+def _main_reason(kinds: list[str]) -> str:
+    for k in _KIND_PRIORITY:
+        if k in kinds:
+            return PATTERN_TEXT.get(k, k)
+    return PATTERN_TEXT.get(kinds[0], kinds[0]) if kinds else "Below the recommended strength."
 
 
 def to_dict(a: Analysis) -> dict:
@@ -154,7 +164,8 @@ def aggregate(analyses: Sequence[Summarisable], reuse: dict | None = None) -> di
 
 
 def aggregate_counts(n: int, labels: Counter, kinds: Counter, bits_sum: float, length_sum: int,
-                     reuse: dict | None = None, policy_result: dict | None = None) -> dict:
+                     reuse: dict | None = None, policy_result: dict | None = None,
+                     worst: list[dict] | None = None) -> dict:
     agg = {
         "tool": "CipherCheck",
         "version": __version__,
@@ -164,11 +175,13 @@ def aggregate_counts(n: int, labels: Counter, kinds: Counter, bits_sum: float, l
         "average_estimated_bits": round(bits_sum / n, 1) if n else 0,
         "average_length": round(length_sum / n, 1) if n else 0,
         "pattern_counts": dict(kinds.most_common()),
-        "reuse": reuse or {"exact_duplicates": 0, "similar_to_another": 0, "similar_groups": 0},
+        "reuse": reuse or {"exact_duplicates": 0, "similar_to_another": 0, "similar_groups": 0,
+                           "shared_accounts": []},
         "most_common_problems": [
             {"kind": k, "count": c, "percent": round(100 * c / n, 1),
              "description": PATTERN_TEXT.get(k, k), "recommendation": PATTERN_ADVICE.get(k, "")}
             for k, c in kinds.most_common()] if n else [],
+        "worst_entries": worst or [],
     }
     if policy_result is not None:
         total = n or 1
@@ -182,15 +195,16 @@ def aggregate_counts(n: int, labels: Counter, kinds: Counter, bits_sum: float, l
     return agg
 
 
+def weak_percent(agg: dict) -> float:
+    """Share (0-100) of an aggregate's passwords assessed VERY WEAK or WEAK."""
+    total = agg["total"] or 1
+    counts = agg["assessment_counts"]
+    return 100 * (counts.get("VERY WEAK", 0) + counts.get("WEAK", 0)) / total
+
+
 def compare_aggregates(old: dict, new: dict) -> dict:
     """How `new` differs from a previous audit `old` of the same kind of dataset."""
-    old_total, new_total = old["total"] or 1, new["total"] or 1
-
-    def weak_percent(agg: dict, total: int) -> float:
-        counts = agg["assessment_counts"]
-        return 100 * (counts.get("VERY WEAK", 0) + counts.get("WEAK", 0)) / total
-
-    old_weak, new_weak = weak_percent(old, old_total), weak_percent(new, new_total)
+    old_weak, new_weak = weak_percent(old), weak_percent(new)
     return {
         "delta_average_bits": round(new["average_estimated_bits"] - old["average_estimated_bits"], 1),
         "delta_average_length": round(new["average_length"] - old["average_length"], 1),
@@ -215,6 +229,16 @@ def aggregate_text(agg: dict) -> str:
               f"({100 * r.get('exact_duplicates', 0) / n:.1f}%)",
               f"  Near-copies of another password (same base word): {r.get('similar_to_another', 0)} "
               f"({100 * r.get('similar_to_another', 0) / n:.1f}%)"]
+    shared = r.get("shared_accounts", [])
+    if shared:
+        lines += ["", "Accounts that share the exact same password:"]
+        for g in shared:
+            lines.append(f"  {' / '.join(g['labels'])}")
+    worst = agg.get("worst_entries", [])
+    if worst:
+        lines += ["", "Fix these first (weakest entries found):"]
+        for w in worst:
+            lines.append(f"  [{w['assessment']}] {w['label']}: {_main_reason(w['kinds'])}")
     lines += ["", "Most common problems (share of passwords):"]
     for p in agg.get("most_common_problems", []):
         lines += [f"  {p['percent']:>5}%  {p['description']}", f"          Fix: {p['recommendation']}"]
@@ -242,7 +266,12 @@ def aggregate_csv(agg: dict) -> str:
     for lbl, c in agg["assessment_counts"].items():
         w.writerow([f"count_{lbl}", c])
     for key, value in agg.get("reuse", {}).items():
-        w.writerow([f"reuse_{key}", value])
+        if key != "shared_accounts":
+            w.writerow([f"reuse_{key}", value])
+    for i, g in enumerate(agg.get("reuse", {}).get("shared_accounts", []), start=1):
+        w.writerow([f"shared_password_group_{i}", " / ".join(g["labels"])])
+    for i, entry in enumerate(agg.get("worst_entries", []), start=1):
+        w.writerow([f"weakest_entry_{i}", f"[{entry['assessment']}] {entry['label']}"])
     for p in agg.get("most_common_problems", []):
         w.writerow([f"problem_{p['kind']}_percent", p["percent"]])
     pol = agg.get("policy")
@@ -272,6 +301,13 @@ def aggregate_html(agg: dict) -> str:
     probs = "\n".join(
         f"<tr><td>{p['percent']}%</td><td>{e(p['description'])}<br><i>Fix: {e(p['recommendation'])}</i></td></tr>"
         for p in agg.get("most_common_problems", [])) or '<tr><td colspan="2">None found.</td></tr>'
+    shared = reuse.get("shared_accounts", [])
+    shared_html = ("<h2>Accounts that share a password</h2><ul>"
+                  + "".join(f"<li>{e(' / '.join(g['labels']))}</li>" for g in shared) + "</ul>") if shared else ""
+    worst = agg.get("worst_entries", [])
+    worst_html = ("<h2>Fix these first</h2><ul>"
+                 + "".join(f"<li><b>{e(w['label'])}</b> [{e(w['assessment'])}]: {e(_main_reason(w['kinds']))}</li>"
+                          for w in worst) + "</ul>") if worst else ""
     pol = agg.get("policy")
     policy_html = ""
     if pol:
@@ -295,6 +331,8 @@ average estimated entropy {agg['average_estimated_bits']} bits</p>
 <p>Passwords used more than once: <b>{reuse.get('exact_duplicates', 0):,}</b> ({100 * reuse.get('exact_duplicates', 0) / total:.1f}%)<br>
 Near-copies of another password (same base word): <b>{reuse.get('similar_to_another', 0):,}</b> ({100 * reuse.get('similar_to_another', 0) / total:.1f}%)</p>
 <h2>Most common problems</h2><table>{probs}</table>
+{worst_html}
+{shared_html}
 {policy_html}
 <p><small>Generated {e(agg['generated_at'])} by CipherCheck {e(agg['version'])}.
 No passwords are stored in this summary.</small></p>
@@ -350,5 +388,21 @@ def aggregate_friendly(agg: dict, lang: str) -> str:
     if agg["pattern_counts"]:
         lines += ["", t(lang, "au_issues")]
         lines += [f" [-] {100 * n / total:.0f}%  {t(lang, 'p_' + KEY[k])}" for k, n in agg["pattern_counts"].items()]
+    shared = reuse.get("shared_accounts", [])
+    if shared:
+        lines += ["", t(lang, "au_shared")]
+        lines += [f" [-] {' / '.join(g['labels'])}" for g in shared]
+    worst = agg.get("worst_entries", [])
+    if worst:
+        lines += ["", t(lang, "au_fix_first")]
+        lines += [f" [-] {w['label']}: {t(lang, 'p_' + KEY[k]) if (k := _first_kind(w['kinds'])) else ''}"
+                 for w in worst]
     lines += ["", BAR]
     return "\n".join(lines)
+
+
+def _first_kind(kinds: list[str]) -> str | None:
+    for k in _KIND_PRIORITY:
+        if k in kinds:
+            return k
+    return kinds[0] if kinds else None

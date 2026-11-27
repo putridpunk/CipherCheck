@@ -7,12 +7,13 @@ import getpass
 import sys
 from pathlib import Path
 
-from . import __version__, hashes, report
+from . import __version__, hashes, history, report
 from .analyzer import analyze
 from .audit import NoPasswordColumn, audit_file
 from .friendly import generate_passphrase
 from .i18n import LANGUAGES
 from .policy import PRESETS as POLICY_PRESETS
+from .policy import generate_compliant, load_file as load_policy_file
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,6 +35,10 @@ def build_parser() -> argparse.ArgumentParser:
     src.add_argument("--check-update", action="store_true",
                      help="check GitHub for a newer release and exit (contacts github.com; "
                           "only when you pass this flag)")
+    src.add_argument("--generate-for-policy", metavar="NAME",
+                     help="print a freshly generated password that satisfies a named policy "
+                          f"({', '.join(sorted(POLICY_PRESETS))}) and exit; use with --policy-file "
+                          "for a custom one")
     p.add_argument("--lang", choices=sorted(LANGUAGES), metavar="CODE",
                    help="plain-language output in this language instead of the technical English "
                         f"report ({', '.join(sorted(LANGUAGES))}); also applies to TXT reports")
@@ -42,9 +47,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile", metavar="TEXT",
                    help="personal information to flag if found in the password (your name, a "
                         "birth date, a pet's name, ...; comma-separated, kept only in memory)")
-    p.add_argument("-P", "--policy", choices=sorted(POLICY_PRESETS), metavar="NAME",
-                   help="batch mode: check each password against a named policy "
-                        f"({', '.join(sorted(POLICY_PRESETS))}) and report pass/fail counts")
+    pol = p.add_mutually_exclusive_group()
+    pol.add_argument("-P", "--policy", choices=sorted(POLICY_PRESETS), metavar="NAME",
+                     help="batch mode: check each password against a named policy "
+                          f"({', '.join(sorted(POLICY_PRESETS))}) and report pass/fail counts")
+    pol.add_argument("--policy-file", type=Path, metavar="PATH",
+                     help="batch mode (or with --generate-for-policy): a custom policy as a small "
+                          "JSON file (see README) instead of a named preset")
     p.add_argument("-r", "--report", type=Path, metavar="PATH", help="write a report to PATH")
     p.add_argument("--format", choices=sorted(set(report.RENDERERS) | set(report.AGG_RENDERERS)),
                    help="report format (default: from extension)")
@@ -53,9 +62,22 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _resolve_policy(args: argparse.Namespace):
+    """The Policy to use, from -P/--policy or --policy-file, or None if neither was given."""
+    if args.policy_file:
+        return load_policy_file(args.policy_file)
+    if args.policy:
+        return POLICY_PRESETS[args.policy]
+    return None
+
+
 def _batch(path: Path, args: argparse.Namespace) -> int:
     show = sys.stderr.isatty() and not args.quiet
-    policy = POLICY_PRESETS[args.policy] if args.policy else None
+    try:
+        policy = _resolve_policy(args)
+    except (OSError, ValueError) as exc:
+        print(f"error: could not read the policy file: {exc}", file=sys.stderr)
+        return 2
 
     def progress(lines: int, fraction: float) -> None:
         if show:
@@ -72,6 +94,7 @@ def _batch(path: Path, args: argparse.Namespace) -> int:
     if show:
         print("\r" + " " * 60 + "\r", end="", file=sys.stderr)
     assert agg is not None  # only None when cancelled, and nothing cancels the CLI
+    history.record(agg["total"], agg["average_estimated_bits"], report.weak_percent(agg))
     if not args.quiet:
         print(report.aggregate_friendly(agg, args.lang) if args.lang else report.aggregate_text(agg))
     if args.report:
@@ -103,6 +126,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.hash is not None:
         print(hashes.to_text(args.hash, args.lang or "en"))
+        return 0
+
+    if args.generate_for_policy is not None:
+        if args.policy_file:
+            try:
+                policy = load_policy_file(args.policy_file)
+            except (OSError, ValueError) as exc:
+                print(f"error: could not read the policy file: {exc}", file=sys.stderr)
+                return 2
+        elif args.generate_for_policy in POLICY_PRESETS:
+            policy = POLICY_PRESETS[args.generate_for_policy]
+        else:
+            print(f"error: unknown policy {args.generate_for_policy!r} "
+                  f"(use one of {', '.join(sorted(POLICY_PRESETS))}, or --policy-file)", file=sys.stderr)
+            return 2
+        print(generate_compliant(policy))
         return 0
 
     if args.check_update:

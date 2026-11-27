@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-27
+
 ### Added
 - **Fix these first:** when the Audit tab (or `-f`) reads a CSV with a site/account column, the dashboard now names the weakest entries by that account (never the password), so you know which to change first.
 - **Accounts that share a password:** when the same password appears under more than one account in that CSV, the accounts involved are now listed.
@@ -122,7 +124,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/putridpunk/CipherCheck/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/putridpunk/CipherCheck/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/putridpunk/CipherCheck/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/putridpunk/CipherCheck/compare/v0.6.1...v0.6.2

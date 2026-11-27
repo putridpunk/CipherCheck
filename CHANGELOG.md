@@ -5,6 +5,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-27
+
 ### Added
 - **Semicolon and tab-separated CSV/TSV import:** the Audit tab and `-f` now also recognise `;`- and tab-separated exports (common from European spreadsheets and some password managers), not only comma-separated ones; a `.tsv` file is always read as tab-separated.
 - **Banned words:** a *Load banned words* button (and `--banned-words-file`) flags your organisation's own terms (its name, products, ...) wherever they appear in a password, in both the Analyze tab/single-password CLI and the Audit tab/batch CLI.
@@ -131,7 +133,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - First release: entropy estimation, pattern and dictionary detection, plain-language desktop app in 9 languages (Matrix theme), command-line tool, TXT / JSON / HTML reports.
 
-[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/putridpunk/CipherCheck/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/putridpunk/CipherCheck/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/putridpunk/CipherCheck/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/putridpunk/CipherCheck/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/putridpunk/CipherCheck/compare/v0.6.2...v0.6.3
